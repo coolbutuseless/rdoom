@@ -26,8 +26,6 @@
 #include "m_misc.h"
 #include "m_argv.h"  // haleyjd 20110212: warning fix
 
-#include <R.h>
-
 int		myargc;
 char**		myargv;
 
@@ -95,8 +93,7 @@ static void LoadResponseFile(int argv_index)
     {
         printf ("\nNo such response file!");
 #if ORIGCODE
-        // exit(1);
-        Rf_error("Doom exit: Load REsponse file");
+        exit(1);
 #endif
     }
 

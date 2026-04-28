@@ -74,7 +74,6 @@
 
 #include "d_main.h"
 
-#include <R.h>
 //
 // D-DoomLoop()
 // Not a globally visible function,
@@ -1083,8 +1082,7 @@ static void D_Endoom(void)
 
     I_Endoom(endoom);
 
-	// exit(0);
-	Rf_error("Doom exit: Enddoom");
+	exit(0);
 }
 
 #if ORIGCODE
@@ -1206,8 +1204,7 @@ void D_DoomMain (void)
     if (M_CheckParm("-search"))
     {
         NET_MasterQuery();
-      // exit(0);
-      Rf_error("Doom exit: CheckParm");
+        exit(0);
     }
 
     //!
@@ -1223,8 +1220,7 @@ void D_DoomMain (void)
     if (p)
     {
         NET_QueryAddress(myargv[p+1]);
-      // exit(0);
-      Rf_error("Doom exit: query address");
+        exit(0);
     }
 
     //!
@@ -1236,8 +1232,7 @@ void D_DoomMain (void)
     if (M_CheckParm("-localsearch"))
     {
         NET_LANQuery();
-      // exit(0);
-      Rf_error("Doom exit: net lanquery");
+        exit(0);
     }
 
 #endif

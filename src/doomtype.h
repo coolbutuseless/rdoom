@@ -33,7 +33,7 @@
 #else
 
 #include <strings.h>
-
+#include <stdbool.h>
 #endif
 
 
@@ -62,20 +62,21 @@
 
 #include <inttypes.h>
 
-#ifdef __cplusplus
+#if defined(__cplusplus) || defined(__bool_true_false_are_defined)
 
-// Use builtin bool type with C++.
-
-typedef bool boolean;
+//boolean is cast to int* in doom. so to keep size the same, make boolean an int.
+typedef unsigned int boolean;
 
 #else
 
+#ifndef __bool_true_false_are_defined 
 typedef enum 
 {
     false	= 0,
     true	= 1,
 	undef	= 0xFFFFFFFF
 } boolean;
+#endif
 
 #endif
 

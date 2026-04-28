@@ -31,6 +31,7 @@ rcsid[] = "$Id: i_x.c,v 1.6 1997/02/03 22:45:10 b1 Exp $";
 #include "d_event.h"
 #include "d_main.h"
 #include "i_video.h"
+#include "i_system.h"
 #include "z_zone.h"
 
 #include "tables.h"
@@ -152,36 +153,59 @@ void cmap_to_rgb565(uint16_t * out, uint8_t * in, int in_pixels)
     }
 }
 
-void cmap_to_fb(uint8_t * out, uint8_t * in, int in_pixels)
+void cmap_to_fb(uint8_t *out, uint8_t *in, int in_pixels)
 {
-    int i, j, k;
+    int i, k;
     struct color c;
     uint32_t pix;
-    uint16_t r, g, b;
 
     for (i = 0; i < in_pixels; i++)
     {
-        c = colors[*in];  /* R:8 G:8 B:8 format! */
-        r = (uint16_t)(c.r >> (8 - s_Fb.red.length));
-        g = (uint16_t)(c.g >> (8 - s_Fb.green.length));
-        b = (uint16_t)(c.b >> (8 - s_Fb.blue.length));
-        pix = r << s_Fb.red.offset;
-        pix |= g << s_Fb.green.offset;
-        pix |= b << s_Fb.blue.offset;
+        c = colors[*in];  // R:8 G:8 B:8
 
-        for (k = 0; k < fb_scaling; k++) {
-            for (j = 0; j < s_Fb.bits_per_pixel/8; j++) {
-                *out = (pix >> (j*8));
-                out++;
+        if (s_Fb.bits_per_pixel == 16)
+        {
+            // RGB565 packing
+            uint16_t p = ((c.r & 0xF8) << 8) |
+                         ((c.g & 0xFC) << 3) |
+                         (c.b >> 3);
+
+#ifdef SYS_BIG_ENDIAN
+            p = swapeLE16(p); // can't use SHORT() because this needs to stay unsigned
+#endif
+            for (k = 0; k < fb_scaling; k++) {
+                *(uint16_t *)out = p;
+                out += 2;
             }
         }
+        else if (s_Fb.bits_per_pixel == 32)
+        {
+            // Assuming RGBA8888
+            pix = (c.r << s_Fb.red.offset) |
+                  (c.g << s_Fb.green.offset) |
+                  (c.b << s_Fb.blue.offset);
+
+#ifdef SYS_BIG_ENDIAN
+            pix = swapLE32(pix);
+#endif
+            for (k = 0; k < fb_scaling; k++) {
+                *(uint32_t *)out = pix;
+                out += 4;
+            }
+        }
+        else {
+            // no clue how to convert this
+            I_Error("No idea how to convert %d bpp pixels", s_Fb.bits_per_pixel);
+        }
+
         in++;
     }
 }
 
 void I_InitGraphics (void)
 {
-    int i;
+    int i, gfxmodeparm;
+    char *mode;
 
 	memset(&s_Fb, 0, sizeof(struct FB_ScreenInfo));
 	s_Fb.xres = DOOMGENERIC_RESX;
@@ -195,18 +219,49 @@ void I_InitGraphics (void)
 
 #else  // CMAP256
 
-	s_Fb.bits_per_pixel = 32;
+	gfxmodeparm = M_CheckParmWithArgs("-gfxmode", 1);
 
-	s_Fb.blue.length = 8;
-	s_Fb.green.length = 8;
-	s_Fb.red.length = 8;
-	s_Fb.transp.length = 8;
+	if (gfxmodeparm) {
+		mode = myargv[gfxmodeparm + 1];
+	}
+	else {
+		// default to rgba8888 like the old behavior, for compatibility
+		// maybe could warn here?
+		mode = "rgba8888";
+	}
 
-	s_Fb.blue.offset = 0;
-	s_Fb.green.offset = 8;
-	s_Fb.red.offset = 16;
-	s_Fb.transp.offset = 24;
-	
+	if (strcmp(mode, "rgba8888") == 0) {
+		// default mode
+		s_Fb.bits_per_pixel = 32;
+
+		s_Fb.blue.length = 8;
+		s_Fb.green.length = 8;
+		s_Fb.red.length = 8;
+		s_Fb.transp.length = 8;
+
+		s_Fb.blue.offset = 0;
+		s_Fb.green.offset = 8;
+		s_Fb.red.offset = 16;
+		s_Fb.transp.offset = 24;
+	}
+
+	else if (strcmp(mode, "rgb565") == 0) {
+		s_Fb.bits_per_pixel = 16;
+
+		s_Fb.blue.length = 5;
+		s_Fb.green.length = 6;
+		s_Fb.red.length = 5;
+		s_Fb.transp.length = 0;
+
+		s_Fb.blue.offset = 11;
+		s_Fb.green.offset = 5;
+		s_Fb.red.offset = 0;
+		s_Fb.transp.offset = 16;
+	}
+	else
+		I_Error("Unknown gfxmode value: %s\n", mode);
+
+
 #endif  // CMAP256
 
     printf("I_InitGraphics: framebuffer: x_res: %d, y_res: %d, x_virtual: %d, y_virtual: %d, bpp: %d\n",

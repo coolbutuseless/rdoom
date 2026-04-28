@@ -356,14 +356,7 @@ static int ZenityErrorBox(char *message)
 
 static boolean already_quitting = false;
 
-
-#include <R.h>
-
-void I_Error2(char *error, ...) {
-  printf("I_Error()\n");
-}
-
-void I_Error(char *error, ...)
+void I_Error (char *error, ...)
 {
     char msgbuf[512];
     va_list argptr;
@@ -473,9 +466,7 @@ void I_Error(char *error, ...)
 
     exit(-1);
 #else
-    while (true)
-    {
-    }
+    exit(-1);
 #endif
 }
 

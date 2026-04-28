@@ -4,3 +4,5 @@
 ^README.md$
 ^LICENSE.md$
 ^working$
+^\.positai$
+^\.claude$
