@@ -18,14 +18,16 @@
 // Global Vars used across all functions
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 uint32_t *canvas = NULL;
-SEXP callback = NULL;
+SEXP draw_callback = NULL;
+SEXP getkey_fun = NULL;
 int frame_num = 0;
+bool done = false;
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Run doom
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_) {
+SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_, SEXP getkey_fun_) {
   int nprotect = 0;
   
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -40,7 +42,8 @@ SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_) {
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Prepare the function call which will be called every frame
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  callback = PROTECT(Rf_lang2(draw_frame_, nr_)); nprotect++;
+  draw_callback   = PROTECT(Rf_lang2(draw_frame_, nr_)); nprotect++;
+  getkey_fun = getkey_fun_;
   
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Fake some command line arguments
@@ -63,7 +66,8 @@ SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_) {
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Run Time Steps (ticks) in Doom
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  for (int i = 0; i < Rf_asInteger(nframes_); i++) {
+  done = false;
+  while (!done) {
     doomgeneric_Tick();
   }
   
@@ -95,9 +99,10 @@ void DG_DrawFrame(void) {
   frame_num++;
   
   if (frame_num % 100 == 0) {
-    Rprintf(".");
+    Rprintf("Frame: % 6i", frame_num);
   }
   
+  // Swizzle pixels from BGR to RGBA
   uint8_t *dst = (uint8_t *)canvas;
   uint8_t *src = (uint8_t *)DG_ScreenBuffer;
   for (int i = 0; i < DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4; i+=4) {
@@ -107,7 +112,7 @@ void DG_DrawFrame(void) {
     dst[i + 3] = 0xFF;
   }
   
-  Rf_eval(callback, R_GlobalEnv);
+  Rf_eval(draw_callback, R_GlobalEnv);
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -131,8 +136,41 @@ uint32_t DG_GetTicksMs(void) {
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Callback: keys pressed
+// @param pressed 1 if key pressed. 0 if key released
+// @param doomKey the specific code for the key. See doomgeneric.h 'KEY_*'
+// @return 1 if key event happened. Otherwise 0
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int DG_GetKey(int* pressed, unsigned char* doomKey) {
+  
+  if (done) return 0;
+  
+  static int toggle = 0;
+  
+  if (toggle == 1) {
+    toggle = 0;
+    return 0;
+  }
+  
+  if (!Rf_isNull(getkey_fun)) {
+    SEXP getkey_callback = PROTECT(Rf_lang1(getkey_fun)); 
+    SEXP res_ = PROTECT(Rf_eval(getkey_callback, R_GlobalEnv));
+    int res = Rf_asInteger(res_);
+    if (res > 0) {
+      toggle = 1;
+      *pressed = 1;
+      *doomKey = Rf_asInteger(res_) & 0xFF;
+      // if (*doomKey != 0) {
+      //   Rprintf("%2x ", *doomKey);
+      // }
+      UNPROTECT(2);
+      if (res == KEY_ESCAPE) {
+        done = true;
+      };
+      return 1;
+    } else {
+      return 0;
+    }
+  }
   return 0;
 }
 

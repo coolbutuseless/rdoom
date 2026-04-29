@@ -3,10 +3,10 @@
 #include <R.h>
 #include <Rinternals.h>
 
-extern SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_);
+extern SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_, SEXP getkey_fun_);
 static const R_CallMethodDef CEntries[] = {
   
-  {"doom_", (DL_FUNC) &doom_, 3},
+  {"doom_", (DL_FUNC) &doom_, 4},
   {NULL , NULL, 0}
 };
 
