@@ -15,23 +15,35 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE)) {
   
-  last_dev <- grDevices::dev.list() |> 
-    names() |> 
-    tail(1)
-  
-  if (is.null(last_dev) || last_dev == 'RStudioGD' || endsWith(last_dev, "off_screen")) {
-    warning("Slow gfx device detected. Try starting an x11() or windows() device prior to running doom()")
-  }
-  flush.console()
-  
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Callback for frame drawing
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  draw_frame <- function(nr) {
-    grDevices::dev.hold()
-    grid::grid.raster(nr, interpolate = FALSE)
-    grDevices::dev.flush()
+  if (requireNamespace('naratigr', quietly = TRUE)) {
+   
+    window <- naratigr::tigr_open(width = 640, height = 400, title = "RDoom")
+    draw_frame <- function(nr) {
+      naratigr::tigr_update(window, nr)
+    }
+     
+  } else {
+    last_dev <- grDevices::dev.list() |> 
+      names() |> 
+      tail(1)
+    
+    if (is.null(last_dev) || last_dev == 'RStudioGD' || endsWith(last_dev, "off_screen")) {
+      warning("Slow gfx device detected. Try starting an x11() or windows() device prior to running doom()")
+    }
+    flush.console()
+    
+    draw_frame <- function(nr) {
+      grDevices::dev.hold()
+      grid::grid.raster(nr, interpolate = FALSE)
+      grDevices::dev.flush()
+    }
   }
+  
+  
+  
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Callback for image saving
@@ -50,6 +62,9 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
   invisible(
     .Call(doom_, wad_file, nframes, draw_frame)
   )
+  
+  message("Finished running doom. Control returning to R.")
+  naratigr::tigr_close(window)
 }
 
 
