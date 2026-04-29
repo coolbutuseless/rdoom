@@ -51,11 +51,11 @@ SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_, SEXP getkey_fun_) {
   const char *wad_file = CHAR(STRING_ELT(wad_file_, 0));
   int argc = 3;
   // char *argv[3] = {"doomgeneric", "-iwad", "/Users/mike/projectsdata/doom/wad/doom1.wad"};
-  char **argv = calloc(3, sizeof(char *));
+  char **argv = (char **)R_alloc(sizeof(char *), 3);
   if (argv == NULL) Rf_error("argv failed");
-  argv[0] = calloc(1024, sizeof(char));
-  argv[1] = calloc(1024, sizeof(char));
-  argv[2] = calloc(1024, sizeof(char));
+  argv[0] = R_alloc(sizeof(char), 1024); memset(argv[0], 0, sizeof(char) * 1000);
+  argv[1] = R_alloc(sizeof(char), 1024); memset(argv[1], 0, sizeof(char) * 1000);
+  argv[2] = R_alloc(sizeof(char), 1024); memset(argv[2], 0, sizeof(char) * 1000);
   strncpy(argv[0], "doom", 4);
   strncpy(argv[1], "-iwad", 5);
   strncpy(argv[2], wad_file, strlen(wad_file));
@@ -70,7 +70,6 @@ SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_, SEXP getkey_fun_) {
   while (!done) {
     doomgeneric_Tick();
   }
-  
 
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Tidy and return
@@ -112,7 +111,8 @@ void DG_DrawFrame(void) {
     dst[i + 3] = 0xFF;
   }
   
-  Rf_eval(draw_callback, R_GlobalEnv);
+  if (!done)
+    Rf_eval(draw_callback, R_GlobalEnv);
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -137,7 +137,9 @@ uint32_t DG_GetTicksMs(void) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Callback: keys pressed
 //
-// The engine tick calls this function over-and-over until it returns 0
+// The engine tick calls this function over-and-over until it returns 0.
+// This means that the R callback needs to take things out of the current key
+// state, handle them, and nullify that key before the next call to the callback
 //
 // @param pressed 1 if key pressed. 0 if key released
 // @param doomKey the specific code for the key. See doomgeneric.h 'KEY_*'
@@ -146,12 +148,18 @@ uint32_t DG_GetTicksMs(void) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int DG_GetKey(int* pressed, unsigned char* doomKey) {
   
+  // If this callback gets called 20 times in a single frame, it means that
+  // there's a bug in the key input handling.
+  // In theory, the tigr key handler only holds a maximum of 6 keys.
+  // Any more than 6 calls is an indication that I've mucked up the
+  // key handling
   static int count = 0;
   if (count > 20) {
-    Rprintf("Possible key loop\n");
+    Rprintf("Possible key input loop\n");
     done = true;
   }
   
+  // If game is 'done' for whatever reason, don't bother processing keys
   if (done) return 0;
 
   
@@ -161,15 +169,17 @@ int DG_GetKey(int* pressed, unsigned char* doomKey) {
     int *res = INTEGER(res_);
     if (res[0] == -1) {
       count = 0;
+      UNPROTECT(2);
       return 0;
     }
     
-    *pressed = res[0];  // 0 or 1 for 'relased' or 'pressed'
-    *doomKey = res[1] & 0xFF;
+    *pressed = res[0];        // 0 or 1 for 'released' or 'pressed'
+    *doomKey = res[1] & 0xFF; // Convert to unsigned char
     
     // Rprintf("= %i %x\n", *pressed, *doomKey);
     count++;
     UNPROTECT(2);
+    if (*doomKey == KEY_ESCAPE) done = true;
     return 1;
   }
   

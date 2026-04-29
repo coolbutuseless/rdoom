@@ -28,45 +28,46 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
       naratigr::tigr_update(window, nr)
     }
     
+    
+    # Need to track the current 'key_pressed' state over multiple calls to 'get_key()'
+    # as this callback is called multiple times by the doom engine.  Each time it 
+    # is called, 'get_key()' is expected to return either
+    #  1)  A doom key code and a pressed/released value (i.e. 1 or 0)
+    #  2)  Return (-1L, -1L) to indicate there are no more key events to handle
+    #      for this frame.
     key_pressed_now   <- NULL
     key_pressed_prior <- NULL
+    
     get_key <- function() {
       
       if (is.null(key_pressed_now)) {
         # cat("s")
         state <- naratigr::tigr_state(window)
         
+        # Sanity check (safe to remove in production)
+        # Are all my names for the doom keys part of the key object
+        # returned from 'tigr'?
         if(!all(names(doom_keys) %in% names(state$key))) {
-          print(names(doom_keys))
-          print(names(state$key))
+          cat("Missing keys:")
           print(setdiff(names(doom_keys), names(state$key)))
         }
         
         key_pressed_now <<- state$key > 0
         
+        # On the very first call, populate the prior state of the keys to be
+        # the same as the initial state.
+        # From then on, the prior state will be updated for each call. 
         if (is.null(key_pressed_prior)) {
-          cat(">>>>>>>>>>>>>>>>>>>>>>")
           key_pressed_prior <<- key_pressed_now
         }
-        
       }
-      
-
-      
-      # if (key_pressed_now[['x']] && !key_pressed_prior[['x']]) {
-      #   # pressed
-      #   key_pressed_prior[['x']] <<- key_pressed_now[['x']]
-      #   return(c(1L, doom_keys[['x']]))
-      # } else if (!key_pressed_now[['x']] && key_pressed_prior[['x']]) {
-      #   # released
-      #   key_pressed_prior[['x']] <<- key_pressed_now[['x']]
-      #   return(c(1L, doom_keys[['x']]))
-      # }
       
       
       for (key in names(doom_keys)) {
         if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
           # pressed
+          # Capture that this was pressed in the 'prior' state, to stop this
+          # key from triggering again for this frame
           key_pressed_prior[[key]] <<- key_pressed_now[[key]]
           return(c(1L, doom_keys[[key]]))
         } else if (!key_pressed_now[[key]] && key_pressed_prior[[key]]) {
@@ -75,12 +76,16 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
           return(c(0L, doom_keys[[key]]))
         }
       }
-      
-      
-      
-      # cat("x")
 
+      # If we get here, then
+      #   - all doom related keys have been signalled back to the doom engine
+      #   - 'key_pressed_prior' holds the key state at the start of this frame
+      #     and can be used in future calls to decide if a key has changed from
+      #     pressed-to-released or vice versa.
       key_pressed_now <<- NULL
+      
+      # Return a custom signal to indicate that there are no more keys to 
+      # process for this frame
       return(c(-1L, -1L))
     }
      
