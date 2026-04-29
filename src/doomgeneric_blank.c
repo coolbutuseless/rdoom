@@ -136,41 +136,44 @@ uint32_t DG_GetTicksMs(void) {
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Callback: keys pressed
+//
+// The engine tick calls this function over-and-over until it returns 0
+//
 // @param pressed 1 if key pressed. 0 if key released
 // @param doomKey the specific code for the key. See doomgeneric.h 'KEY_*'
+//
 // @return 1 if key event happened. Otherwise 0
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int DG_GetKey(int* pressed, unsigned char* doomKey) {
   
-  if (done) return 0;
-  
-  static int toggle = 0;
-  
-  if (toggle == 1) {
-    toggle = 0;
-    return 0;
+  static int count = 0;
+  if (count > 20) {
+    Rprintf("Possible key loop\n");
+    done = true;
   }
+  
+  if (done) return 0;
+
   
   if (!Rf_isNull(getkey_fun)) {
-    SEXP getkey_callback = PROTECT(Rf_lang1(getkey_fun)); 
+    SEXP getkey_callback = PROTECT(Rf_lang1(getkey_fun));
     SEXP res_ = PROTECT(Rf_eval(getkey_callback, R_GlobalEnv));
-    int res = Rf_asInteger(res_);
-    if (res > 0) {
-      toggle = 1;
-      *pressed = 1;
-      *doomKey = Rf_asInteger(res_) & 0xFF;
-      // if (*doomKey != 0) {
-      //   Rprintf("%2x ", *doomKey);
-      // }
-      UNPROTECT(2);
-      if (res == KEY_ESCAPE) {
-        done = true;
-      };
-      return 1;
-    } else {
+    int *res = INTEGER(res_);
+    if (res[0] == -1) {
+      count = 0;
       return 0;
     }
+    
+    *pressed = res[0];  // 0 or 1 for 'relased' or 'pressed'
+    *doomKey = res[1] & 0xFF;
+    
+    // Rprintf("= %i %x\n", *pressed, *doomKey);
+    count++;
+    UNPROTECT(2);
+    return 1;
   }
+  
+  count = 0;
   return 0;
 }
 

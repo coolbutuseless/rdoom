@@ -27,27 +27,61 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
     draw_frame <- function(nr) {
       naratigr::tigr_update(window, nr)
     }
+    
+    key_pressed_now   <- NULL
+    key_pressed_prior <- NULL
     get_key <- function() {
-      state <- naratigr::tigr_state(window)
       
-      if ('x' %in% state$keys$char$held) {
-        doom_keys$x
-      } else if ('RETURN' %in% state$keys$special$held) {
-        doom_keys$RETURN
-      } else if ("LEFT" %in% state$keys$special$held) {
-        doom_keys$LEFT
-      } else if ("RIGHT" %in% state$keys$special$held) {
-        doom_keys$RIGHT
-      } else if ("UP" %in% state$keys$special$held) {
-        doom_keys$UP
-      } else if ("DOWN" %in% state$keys$special$held) {
-        doom_keys$DOWN    
-      } else if ("ESC" %in% state$keys$special$held) {
-        doom_keys$ESC      
-      } else {
-        0L
-      }
+      if (is.null(key_pressed_now)) {
+        # cat("s")
+        state <- naratigr::tigr_state(window)
         
+        if(!all(names(doom_keys) %in% names(state$key))) {
+          print(names(doom_keys))
+          print(names(state$key))
+          print(setdiff(names(doom_keys), names(state$key)))
+        }
+        
+        key_pressed_now <<- state$key > 0
+        
+        if (is.null(key_pressed_prior)) {
+          cat(">>>>>>>>>>>>>>>>>>>>>>")
+          key_pressed_prior <<- key_pressed_now
+        }
+        
+      }
+      
+
+      
+      # if (key_pressed_now[['x']] && !key_pressed_prior[['x']]) {
+      #   # pressed
+      #   key_pressed_prior[['x']] <<- key_pressed_now[['x']]
+      #   return(c(1L, doom_keys[['x']]))
+      # } else if (!key_pressed_now[['x']] && key_pressed_prior[['x']]) {
+      #   # released
+      #   key_pressed_prior[['x']] <<- key_pressed_now[['x']]
+      #   return(c(1L, doom_keys[['x']]))
+      # }
+      
+      
+      for (key in names(doom_keys)) {
+        if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
+          # pressed
+          key_pressed_prior[[key]] <<- key_pressed_now[[key]]
+          return(c(1L, doom_keys[[key]]))
+        } else if (!key_pressed_now[[key]] && key_pressed_prior[[key]]) {
+          # released
+          key_pressed_prior[[key]] <<- key_pressed_now[[key]]
+          return(c(0L, doom_keys[[key]]))
+        }
+      }
+      
+      
+      
+      # cat("x")
+
+      key_pressed_now <<- NULL
+      return(c(-1L, -1L))
     }
      
   } else {
