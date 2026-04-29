@@ -135,16 +135,80 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
 }
 
 
-doom_keys <- list(
-  RIGHT  = 0xae,
-  LEFT   = 0xac,
-  UP     = 0xad,
-  DOWN   = 0xaf,
-  ESC    =   27,
-  RETURN =   13,
-  TAB    =    9,
-  x      = 0xa3  # fire
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# These are the reference doom key values from 'doomgeneric.h'
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ref_doom_keys <- list(
+  KEY_RIGHTARROW = 0xae,
+  KEY_LEFTARROW	 = 0xac,
+  KEY_UPARROW		 = 0xad,
+  KEY_DOWNARROW	 = 0xaf,
+  KEY_STRAFE_L	 = 0xa0,
+  KEY_STRAFE_R	 = 0xa1,
+  KEY_USE			   = 0xa2,
+  KEY_FIRE		   = 0xa3,
+  KEY_ESCAPE	   = 27,
+  KEY_ENTER		   = 13,
+  KEY_TAB			   = 9,
+  KEY_F1			   = (0x80+0x3b),
+  KEY_F2			   = (0x80+0x3c),
+  KEY_F3			   = (0x80+0x3d),
+  KEY_F4			   = (0x80+0x3e),
+  KEY_F5			   = (0x80+0x3f),
+  KEY_F6			   = (0x80+0x40),
+  KEY_F7			   = (0x80+0x41),
+  KEY_F8			   = (0x80+0x42),
+  KEY_F9			   = (0x80+0x43),
+  KEY_F10			   = (0x80+0x44),
+  KEY_F11			   = (0x80+0x57),
+  KEY_F12			   = (0x80+0x58),
+  KEY_BACKSPACE	 = 0x7f,
+  KEY_PAUSE	     = 0xff,
+  KEY_EQUALS     =	0x3d,
+  KEY_MINUS      = 0x2d,
+  KEY_RSHIFT	   = (0x80+0x36),
+  KEY_RCTRL      = (0x80+0x1d),
+  KEY_RALT       = (0x80+0x38),
+  KEY_LALT       = (0x80+0x38)
 ) |> lapply(as.integer)
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Mapping from 'tigr' key names to ref_doom_key values
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+doom_keys <- list(
+  RIGHT     = "KEY_RIGHTARROW", 
+  LEFT      = "KEY_LEFTARROW",	 
+  UP        = "KEY_UPARROW",		 
+  DOWN      = "KEY_DOWNARROW",	 
+  `,`       = "KEY_STRAFE_L",	 
+  `.`       = "KEY_STRAFE_R",	 
+  ` `       = "KEY_USE",			   
+  CTRL      = "KEY_FIRE",		   
+  ESC       = "KEY_ESCAPE",	   
+  RETURN    = "KEY_ENTER",		   
+  TAB       = "KEY_TAB",			   
+  F1        = "KEY_F1",			   
+  F2        = "KEY_F2",			   
+  F3        = "KEY_F3",			   
+  F4        = "KEY_F4",			   
+  F5        = "KEY_F5",			   
+  F6        = "KEY_F6",			   
+  F7        = "KEY_F7",			   
+  F8        = "KEY_F8",			   
+  F9        = "KEY_F9",			   
+  F10       = "KEY_F10",			   
+  F11       = "KEY_F11",			   
+  F12       = "KEY_F12",			   
+  BACKSPACE = "KEY_BACKSPACE",	 
+  p         = "KEY_PAUSE",	     
+  `=`       = "KEY_EQUALS",     
+  `-`       = "KEY_MINUS",      
+  SHIFT     = "KEY_RSHIFT",	   
+  # CTRL      = "KEY_RCTRL",      
+  # ALT       = "KEY_RALT",       
+  ALT       = "KEY_LALT"       
+) |> lapply(\(x) ref_doom_keys[[x]])
 
 
 # #define KEY_RIGHTARROW	0xae
