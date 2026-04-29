@@ -99,7 +99,7 @@ void DG_DrawFrame(void) {
   frame_num++;
   
   if (frame_num % 100 == 0) {
-    Rprintf("Frame: % 6i", frame_num);
+    Rprintf("Frame: % 6i\n", frame_num);
   }
   
   // Swizzle pixels from BGR to RGBA
