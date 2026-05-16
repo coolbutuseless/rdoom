@@ -17,15 +17,17 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Callback for frame drawing. Two choices
-  #  - naratigr
+  #  - tigerfb
   #  - grid.raster (try and open a fast graphics device before running doom())
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  if (requireNamespace('naratigr', quietly = TRUE)) {
+  if (requireNamespace('tigerfb', quietly = TRUE)) {
    
-    window <- naratigr::tigr_open(width = 640, height = 400, title = "RDoom", expand = 2)
+    window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", expand = 2)
+    on.exit(tigerfb::fb_close(window))
+    
     
     draw_frame <- function(nr) {
-      naratigr::tigr_update(window, nr)
+      tigerfb::fb_update(window, nr)
     }
     
     
@@ -42,7 +44,7 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
       
       if (is.null(key_pressed_now)) {
         # cat("s")
-        state <- naratigr::tigr_state(window)
+        state <- tigerfb::fb_state(window)
         
         # Sanity check (safe to remove in production)
         # Are all my names for the doom keys part of the key object
@@ -131,7 +133,6 @@ doom <- function(nframes = 100, wad_file = system.file("doom1.wad", package = "r
   )
   
   message("Finished running doom. Control returning to R.")
-  naratigr::tigr_close(window)
 }
 
 
