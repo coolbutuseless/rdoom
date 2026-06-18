@@ -14,6 +14,10 @@
 doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE)) {
   
   
+  wad_file <- normalizePath(wad_file)
+  stopifnot(file.exists(wad_file))
+  
+  
   window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", expand = 2)
   on.exit(tigerfb::fb_close(window))
   
