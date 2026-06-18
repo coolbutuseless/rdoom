@@ -6,3 +6,6 @@
 ^working$
 ^\.positai$
 ^\.claude$
+^LICENSE\.md$
+^\.savegame$
+src/build/*

@@ -1,14 +1,18 @@
 Package: rdoom
 Type: Package
-Title: Playable Doom
-Version: 0.1.0
+Title: Doom
+Version: 1.0.0
 Authors@R: c(
     person("Mike", "Cheng", role = c("aut", "cre", 'cph'), email = "mikefc@coolbutuseless.com")
     )
 Maintainer: Mike Cheng <mikefc@coolbutuseless.com>
-Description: Playable Doom.
-License: MIT + file LICENSE
+Description: Doom.
 Encoding: UTF-8
-RoxygenNote: 7.3.3
-Suggests:
+Imports:
     tigerfb
+Config/roxygen2/version: 8.0.0
+Copyright: This package wraps the 'rdoomgeneric' library which is licensed
+    under the GPL
+License: GPL (>= 2)
+Depends:
+    R (>= 4.1.0)

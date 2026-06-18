@@ -27,7 +27,7 @@ bool done = false;
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Run doom
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-SEXP doom_(SEXP wad_file_, SEXP nframes_, SEXP draw_frame_, SEXP getkey_fun_) {
+SEXP doom_(SEXP wad_file_, SEXP draw_frame_, SEXP getkey_fun_) {
   int nprotect = 0;
   
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,12 +94,6 @@ void DG_Init(void) {
 // Callback: Frame is ready
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void DG_DrawFrame(void) {
-  
-  frame_num++;
-  
-  if (frame_num % 100 == 0) {
-    Rprintf("Frame: % 6i\n", frame_num);
-  }
   
   // Swizzle pixels from BGR to RGBA
   uint8_t *dst = (uint8_t *)canvas;
