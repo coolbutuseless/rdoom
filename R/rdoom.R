@@ -142,10 +142,12 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
 ref_doom_keys <- list(
   KEY_RIGHTARROW = 0xae,
   KEY_LEFTARROW	 = 0xac,
+  
   KEY_UPARROW		 = 0xad,
   KEY_DOWNARROW	 = 0xaf,
   KEY_STRAFE_L	 = 0xa0,
   KEY_STRAFE_R	 = 0xa1,
+  
   KEY_USE			   = 0xa2,
   KEY_FIRE		   = 0xa3,
   KEY_ESCAPE	   = 27,
@@ -180,10 +182,17 @@ ref_doom_keys <- list(
 doom_keys <- list(
   RIGHT     = "KEY_RIGHTARROW", 
   LEFT      = "KEY_LEFTARROW",	 
+  
   UP        = "KEY_UPARROW",		 
   DOWN      = "KEY_DOWNARROW",	 
   `,`       = "KEY_STRAFE_L",	 
   `.`       = "KEY_STRAFE_R",	 
+  
+  w         = "KEY_UPARROW",		 
+  s         = "KEY_DOWNARROW",	 
+  a         = "KEY_STRAFE_L",	 
+  d         = "KEY_STRAFE_R",	 
+  
   ` `       = "KEY_USE",			   
   CTRL      = "KEY_FIRE",		   
   ESC       = "KEY_ESCAPE",	   
