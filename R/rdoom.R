@@ -41,9 +41,26 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     setdiff(LETTERS) 
   alpha_keys <- alpha_keys[nchar(alpha_keys) == 1]
   
+  coords  <- NULL
+  buttons <- NULL
   
+  key_flow <- 0L
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Define the functino which is called every frame in order to log 
+  # keyboard events.
+  # This function gets called multiple times until all buffered events
+  # are exhausted - and it returns (-1L, -1L)
+  # For each key event that is occurring this function returns
+  #   - (1, integer-key-value) if the key was pressed
+  #   - (0, integer-key-value) if the key was released
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   get_key <- function() {
     
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # 
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if (is.null(key_pressed_now)) {
       # cat("s")
       state <- tigerfb::fb_state(window)
@@ -58,6 +75,9 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
       
       key_pressed_now <<- state$key > 0
       
+      coords  <<- state$mouse$coords
+      buttons <<- state$mouse$buttons
+      
       # On the very first call, populate the prior state of the keys to be
       # the same as the initial state.
       # From then on, the prior state will be updated for each call. 
@@ -67,6 +87,34 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     }
     
     
+    
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Simulate pressing keys if using the mouse
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if (!is.null(coords)) {
+      # Pretend we've pressed the left/right  button
+      # depending on which side of the screen we are on
+      if (coords[[1]] < 640/2 - 40) {
+        key_pressed_now[['LEFT']] <<- TRUE
+      } else if (coords[[1]] > 640/2 + 40) {
+        key_pressed_now[['RIGHT']] <<- TRUE
+      }
+      coords <<- NULL
+    }
+    
+    if (!is.null(buttons)) {
+      if (buttons[[1]]) {
+        key_pressed_now[['CTRL']] <<- TRUE
+      }
+      buttons <<- NULL
+    }
+    
+    
+    
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Special doom keys
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for (key in names(doom_keys)) {
       if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
         # pressed
@@ -82,6 +130,9 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     }
     
     
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # general alpha numeric and character keys
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for (key in alpha_keys) {
       if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
         # pressed
@@ -99,11 +150,13 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     
     
     
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # If we get here, then
     #   - all doom related keys have been signalled back to the doom engine
     #   - 'key_pressed_prior' holds the key state at the start of this frame
     #     and can be used in future calls to decide if a key has changed from
     #     pressed-to-released or vice versa.
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     key_pressed_now <<- NULL
     
     # Return a custom signal to indicate that there are no more keys to 
