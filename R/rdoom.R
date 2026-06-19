@@ -5,20 +5,21 @@
 #' 
 #' @param wad_file full path to WAD file. Default: use the demo 'doom1.wad' 
 #'        included with this package.
+#' @param expand expand = 1, 2, 4
 #' @return None
 #' @import grid
 #' @import grDevices
 #' @importFrom utils tail flush.console
 #' @export
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE)) {
+doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), expand = 2) {
   
   
   wad_file <- normalizePath(wad_file)
   stopifnot(file.exists(wad_file))
   
   
-  window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", expand = 2)
+  window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", expand = expand)
   on.exit(tigerfb::fb_close(window))
   
   
@@ -74,6 +75,9 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
         return(c(0L, doom_keys[[key]]))
       }
     }
+    
+    
+    
     
     # If we get here, then
     #   - all doom related keys have been signalled back to the doom engine
@@ -141,12 +145,16 @@ ref_doom_keys <- list(
   KEY_F12			   = (0x80+0x58),
   KEY_BACKSPACE	 = 0x7f,
   KEY_PAUSE	     = 0xff,
-  KEY_EQUALS     =	0x3d,
+  KEY_EQUALS     = 0x3d,
   KEY_MINUS      = 0x2d,
   KEY_RSHIFT	   = (0x80+0x36),
   KEY_RCTRL      = (0x80+0x1d),
   KEY_RALT       = (0x80+0x38),
-  KEY_LALT       = (0x80+0x38)
+  KEY_LALT       = (0x80+0x38),
+  
+  KEY_I = utf8ToInt('i'), # For god mode: IDDQD
+  KEY_D = utf8ToInt('d'),
+  KEY_Q = utf8ToInt('q')
 ) |> lapply(as.integer)
 
 
@@ -184,7 +192,11 @@ doom_keys <- list(
   SHIFT     = "KEY_RSHIFT",	   
   # CTRL      = "KEY_RCTRL",      
   # ALT       = "KEY_RALT",       
-  ALT       = "KEY_LALT"       
+  ALT       = "KEY_LALT",
+  
+  i         = "KEY_I",   # For god mode: IDDQD
+  d         = "KEY_D",
+  q         = "KEY_Q"
 ) |> lapply(\(x) ref_doom_keys[[x]])
 
 
