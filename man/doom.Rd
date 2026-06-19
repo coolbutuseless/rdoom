@@ -6,12 +6,14 @@
 \usage{
 doom(
   wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
-  title = "RDoom"
+  expand = 2
 )
 }
 \arguments{
 \item{wad_file}{full path to WAD file. Default: use the demo 'doom1.wad' 
 included with this package.}
+
+\item{expand}{expand = 1, 2, 4}
 }
 \value{
 None

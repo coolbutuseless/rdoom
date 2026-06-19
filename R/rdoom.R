@@ -37,6 +37,11 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
   key_pressed_now   <- NULL
   key_pressed_prior <- NULL
   
+  alpha_keys <- tigerfb::fb_key_names() |> 
+    setdiff(LETTERS) 
+  alpha_keys <- alpha_keys[nchar(alpha_keys) == 1]
+  
+  
   get_key <- function() {
     
     if (is.null(key_pressed_now)) {
@@ -73,6 +78,21 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
         # released
         key_pressed_prior[[key]] <<- key_pressed_now[[key]]
         return(c(0L, doom_keys[[key]]))
+      }
+    }
+    
+    
+    for (key in alpha_keys) {
+      if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
+        # pressed
+        # Capture that this was pressed in the 'prior' state, to stop this
+        # key from triggering again for this frame
+        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
+        return(c(1L, utf8ToInt(key)))
+      } else if (!key_pressed_now[[key]] && key_pressed_prior[[key]]) {
+        # released
+        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
+        return(c(0L, utf8ToInt(key)))
       }
     }
     
@@ -145,16 +165,12 @@ ref_doom_keys <- list(
   KEY_F12			   = (0x80+0x58),
   KEY_BACKSPACE	 = 0x7f,
   KEY_PAUSE	     = 0xff,
-  KEY_EQUALS     = 0x3d,
-  KEY_MINUS      = 0x2d,
+  # KEY_EQUALS     = 0x3d,
+  # KEY_MINUS      = 0x2d,
   KEY_RSHIFT	   = (0x80+0x36),
   KEY_RCTRL      = (0x80+0x1d),
   KEY_RALT       = (0x80+0x38),
-  KEY_LALT       = (0x80+0x38),
-  
-  KEY_I = utf8ToInt('i'), # For god mode: IDDQD
-  KEY_D = utf8ToInt('d'),
-  KEY_Q = utf8ToInt('q')
+  KEY_LALT       = (0x80+0x38)
 ) |> lapply(as.integer)
 
 
@@ -187,16 +203,12 @@ doom_keys <- list(
   F12       = "KEY_F12",			   
   BACKSPACE = "KEY_BACKSPACE",	 
   p         = "KEY_PAUSE",	     
-  `=`       = "KEY_EQUALS",     
-  `-`       = "KEY_MINUS",      
+  # `=`       = "KEY_EQUALS",     
+  # `-`       = "KEY_MINUS",      
   SHIFT     = "KEY_RSHIFT",	   
   # CTRL      = "KEY_RCTRL",      
   # ALT       = "KEY_RALT",       
-  ALT       = "KEY_LALT",
-  
-  i         = "KEY_I",   # For god mode: IDDQD
-  d         = "KEY_D",
-  q         = "KEY_Q"
+  ALT       = "KEY_LALT"
 ) |> lapply(\(x) ref_doom_keys[[x]])
 
 
