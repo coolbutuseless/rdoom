@@ -20,6 +20,7 @@
 uint32_t *canvas = NULL;
 SEXP draw_callback = NULL;
 SEXP getkey_fun = NULL;
+SEXP get_mouse_delta_fun = NULL;
 int frame_num = 0;
 bool done = false;
 
@@ -27,7 +28,7 @@ bool done = false;
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Run doom
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-SEXP doom_(SEXP wad_file_, SEXP draw_frame_, SEXP getkey_fun_) {
+SEXP doom_(SEXP wad_file_, SEXP draw_frame_, SEXP getkey_fun_, SEXP get_mouse_delta_fun_) {
   int nprotect = 0;
   
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -44,6 +45,7 @@ SEXP doom_(SEXP wad_file_, SEXP draw_frame_, SEXP getkey_fun_) {
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   draw_callback   = PROTECT(Rf_lang2(draw_frame_, nr_)); nprotect++;
   getkey_fun = getkey_fun_;
+  get_mouse_delta_fun = get_mouse_delta_fun_;
   
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Fake some command line arguments
@@ -189,4 +191,20 @@ void DG_SetWindowTitle(const char * title) {
 }
 
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Mouse movement
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+int32_t DG_GetMouseDelta(void) {
+  
+  int32_t res = 1;
+  
+  if (!Rf_isNull(get_mouse_delta_fun)) {
+    SEXP get_mouse_delta_callback = PROTECT(Rf_lang1(get_mouse_delta_fun));
+    SEXP res_ = PROTECT(Rf_eval(get_mouse_delta_callback, R_GlobalEnv));
+    res = INTEGER(res_)[0];
+  }
+
+  
+  return res;
+}
 

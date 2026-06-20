@@ -393,6 +393,9 @@ void G_BuildTiccmd (ticcmd_t* cmd, int maketic)
 	    cmd->angleturn += angleturn[tspeed]; 
     } 
  
+  extern int32_t DG_GetMouseDelta(void);
+    cmd->angleturn += (short)DG_GetMouseDelta();
+ 
     if (gamekeydown[key_up]) 
     {
 	// fprintf(stderr, "up\n");

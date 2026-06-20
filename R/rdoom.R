@@ -5,21 +5,24 @@
 #' 
 #' @param wad_file full path to WAD file. Default: use the demo 'doom1.wad' 
 #'        included with this package.
-#' @param expand expand = 1, 2, 4
+#' @param sensitivity 75
+#' @param ... further options passed to \code{tigerfb::fb_open()}
 #' @return None
 #' @import grid
 #' @import grDevices
 #' @importFrom utils tail flush.console
 #' @export
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), expand = 2) {
+doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), 
+                 sensitivity = 75,
+                 ...) {
   
   
   wad_file <- normalizePath(wad_file)
   stopifnot(file.exists(wad_file))
   
   
-  window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", expand = expand)
+  window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", ...)
   on.exit(tigerfb::fb_close(window))
   
   
@@ -75,7 +78,7 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
       
       key_pressed_now <<- state$key > 0
       
-      coords  <<- state$mouse$coords
+      # coords  <<- state$mouse$coords
       buttons <<- state$mouse$buttons
       
       # On the very first call, populate the prior state of the keys to be
@@ -92,17 +95,17 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Simulate pressing keys if using the mouse
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if (!is.null(coords)) {
-      # Pretend we've pressed the left/right  button
-      # depending on which side of the screen we are on
-      if (coords[[1]] < 640/2 - 40) {
-        key_pressed_now[['LEFT']] <<- TRUE
-      } else if (coords[[1]] > 640/2 + 40) {
-        key_pressed_now[['RIGHT']] <<- TRUE
-      }
-      coords <<- NULL
-    }
-    
+    # if (!is.null(coords)) {
+    #   # Pretend we've pressed the left/right  button
+    #   # depending on which side of the screen we are on
+    #   if (coords[[1]] < 640/2 - 40) {
+    #     key_pressed_now[['LEFT']] <<- TRUE
+    #   } else if (coords[[1]] > 640/2 + 40) {
+    #     key_pressed_now[['RIGHT']] <<- TRUE
+    #   }
+    #   coords <<- NULL
+    # }
+
     if (!is.null(buttons)) {
       if (buttons[[1]]) {
         key_pressed_now[['CTRL']] <<- TRUE
@@ -164,7 +167,26 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     return(c(-1L, -1L))
   }
   
+  xpos_prior <- NULL
   
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Callback for mouse delta
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  get_mouse_delta <- function() {
+    state <- tigerfb::fb_state(window)
+    
+    xpos <- state$mouse$coords[[1]]
+    
+    if (is.null(xpos_prior)) {
+      xpos_prior <<- xpos
+    }
+    
+    delta <- (xpos_prior - xpos) * sensitivity
+    xpos_prior <<- xpos
+    
+    
+    return(as.integer(delta))
+  }
   
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -182,7 +204,7 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
   # }
   
   invisible(
-    .Call(doom_, wad_file, draw_frame, get_key)
+    .Call(doom_, wad_file, draw_frame, get_key, get_mouse_delta)
   )
   
   message("Finished running doom. Control returning to R.")

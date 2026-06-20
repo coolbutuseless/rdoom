@@ -11,8 +11,9 @@ Encoding: UTF-8
 Imports:
     tigerfb
 Config/roxygen2/version: 8.0.0
-Copyright: This package wraps the 'rdoomgeneric' library which is licensed
-    under the GPL
+Copyright: This package wraps the 'doomgeneric' library which is
+   licensed under the GPL. It incorporates mouse delta handling from
+   https://github.com/Daxanius/doomgeneric
 License: GPL (>= 2)
 Depends:
     R (>= 4.1.0)
