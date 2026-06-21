@@ -8,6 +8,7 @@ doom(
   wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
   mouse = FALSE,
   sensitivity = 75,
+  keymap = keymap_default(),
   ...
 )
 }
@@ -18,6 +19,8 @@ included with this package.}
 \item{mouse}{use the mouse? Default: FALSE}
 
 \item{sensitivity}{75}
+
+\item{keymap}{created with 'keymap_default()' or 'keymap_create()'}
 
 \item{...}{further options passed to \code{tigerfb::fb_open()}}
 }
