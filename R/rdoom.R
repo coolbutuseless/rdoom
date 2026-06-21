@@ -320,15 +320,22 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     state <- tigerfb::fb_state(window)
     
     xpos <- state$mouse$coords[[1]]
+    ypos <- state$mouse$coords[[2]]
     
     if (is.null(xpos_prior)) {
       xpos_prior <<- xpos
     }
     
-    delta <- (xpos_prior - xpos) * sensitivity
+    if (ypos > (400 - 100)) {
+      # Ignore mouse movement if it is low-down.  
+      # This is a workaround for not having low-level mouse movement detection,
+      # and instead having to rely on cursor position
+      delta <- 0L
+    } else {
+      delta <- (xpos_prior - xpos) * sensitivity
+    }
+    
     xpos_prior <<- xpos
-    
-    
     return(as.integer(delta))
   }
   
