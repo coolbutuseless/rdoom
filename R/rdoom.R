@@ -133,7 +133,7 @@ keymap_default <- function() {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), 
                  mouse = FALSE,
-                 sensitivity = 75,
+                 sensitivity = 150,
                  keymap = keymap_default(),
                  ...) {
   
@@ -249,6 +249,19 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
       if ('F10' %in% all_keys_now) {
         keys$ascii_only <- FALSE
       }
+      
+      
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      # Do mouse button handling here. 
+      #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      if (mouse) {
+        if (state$mouse$buttons[1]) {
+          keys$down <- c(keys$down, doom_keys_to_code[['KEY_FIRE']])
+        } else {
+          keys$up   <- c(keys$up  , doom_keys_to_code[['KEY_FIRE']])
+        }
+      }
+      
       
     }
     
