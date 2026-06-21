@@ -1082,7 +1082,11 @@ static void D_Endoom(void)
 
     I_Endoom(endoom);
 
-	exit(0);
+    // MikeFC June 2026:
+    // You really shouldn't call 'exit()' from C code being called from R, 
+    // as this will exit the R process as well and bring your R session to
+    // its knees!
+	// exit(0); // MikeFC removed this exit()
 }
 
 #if ORIGCODE

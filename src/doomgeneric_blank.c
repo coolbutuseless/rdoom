@@ -97,6 +97,8 @@ void DG_Init(void) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 void DG_DrawFrame(void) {
   
+  if (canvas == NULL || DG_ScreenBuffer == NULL || done) return;
+  
   // Swizzle pixels from BGR to RGBA
   uint8_t *dst = (uint8_t *)canvas;
   uint8_t *src = (uint8_t *)DG_ScreenBuffer;
@@ -144,6 +146,8 @@ uint32_t DG_GetTicksMs(void) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int DG_GetKey(int* pressed, unsigned char* doomKey) {
   
+  if (done) return 0;
+  
   // If this callback gets called 20 times in a single frame, it means that
   // there's a bug in the key input handling.
   // In theory, the tigr key handler only holds a maximum of 6 keys.
@@ -175,7 +179,7 @@ int DG_GetKey(int* pressed, unsigned char* doomKey) {
     // Rprintf("= %i %x\n", *pressed, *doomKey);
     count++;
     UNPROTECT(2);
-    if (*doomKey == KEY_ESCAPE) done = true;
+    // if (*doomKey == KEY_ESCAPE) done = true;
     return 1;
   }
   
@@ -196,12 +200,15 @@ void DG_SetWindowTitle(const char * title) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 int32_t DG_GetMouseDelta(void) {
   
-  int32_t res = 1;
+  if (done) return 0;
+  
+  int32_t res = 0;
   
   if (!Rf_isNull(get_mouse_delta_fun)) {
     SEXP get_mouse_delta_callback = PROTECT(Rf_lang1(get_mouse_delta_fun));
     SEXP res_ = PROTECT(Rf_eval(get_mouse_delta_callback, R_GlobalEnv));
     res = INTEGER(res_)[0];
+    UNPROTECT(2);
   }
 
   

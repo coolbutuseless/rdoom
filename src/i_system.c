@@ -257,6 +257,12 @@ void I_Quit (void)
         entry = entry->next;
     }
 
+    // MikeFC June 2026
+    // Instead of ever calling 'exit(0)', just set the boolean 'done' to true
+    // and let the R callbacks grind to a halt.
+    extern boolean done;
+    done = true;
+    
 #if ORIGCODE
     SDL_Quit();
 

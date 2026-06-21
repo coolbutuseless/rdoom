@@ -1,10 +1,18 @@
 
 
+
+# Single letter keys
+alpha_keys <- tigerfb::fb_key_names() |> 
+  setdiff(LETTERS) 
+alpha_keys <- alpha_keys[nchar(alpha_keys) == 1]
+
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #' Run doom in demo mode. No keyboard input.
 #' 
 #' @param wad_file full path to WAD file. Default: use the demo 'doom1.wad' 
 #'        included with this package.
+#' @param mouse use the mouse? Default: FALSE
 #' @param sensitivity 75
 #' @param ... further options passed to \code{tigerfb::fb_open()}
 #' @return None
@@ -14,6 +22,7 @@
 #' @export
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), 
+                 mouse = FALSE,
                  sensitivity = 75,
                  ...) {
   
@@ -23,7 +32,7 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
   
   
   window <- tigerfb::fb_open(width = 640, height = 400, title = "RDoom", ...)
-  on.exit(tigerfb::fb_close(window))
+  on.exit({tigerfb::fb_close(window); rm(window); Sys.sleep(1); gc(); Sys.sleep(1);})
   
   
   draw_frame <- function(nr) {
@@ -37,17 +46,12 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
   #  1)  A doom key code and a pressed/released value (i.e. 1 or 0)
   #  2)  Return (-1L, -1L) to indicate there are no more key events to handle
   #      for this frame.
-  key_pressed_now   <- NULL
-  key_pressed_prior <- NULL
+  keys       <- new.env()
+  keys$down0 <- NULL
+  keys$down  <- NULL
+  keys$prior <- NULL
+  keys$up    <- NULL
   
-  alpha_keys <- tigerfb::fb_key_names() |> 
-    setdiff(LETTERS) 
-  alpha_keys <- alpha_keys[nchar(alpha_keys) == 1]
-  
-  coords  <- NULL
-  buttons <- NULL
-  
-  key_flow <- 0L
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Define the functino which is called every frame in order to log 
@@ -64,90 +68,46 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if (is.null(key_pressed_now)) {
-      # cat("s")
+    if (is.null(keys$down)) {
       state <- tigerfb::fb_state(window)
       
-      # Sanity check (safe to remove in production)
-      # Are all my names for the doom keys part of the key object
-      # returned from 'tigr'?
-      if(!all(names(doom_keys) %in% names(state$key))) {
-        cat("Missing keys:")
-        print(setdiff(names(doom_keys), names(state$key)))
-      }
+      # names of keys which are pressed
+      all_keys_now   <- names(state$key)[state$key > 0]
+      doom_keys_now  <- intersect(names(tigerfb_keys_to_doom_code), all_keys_now)
+      alpha_keys_now <- intersect(all_keys_now, alpha_keys) |> paste(collapse = "") |> utf8ToInt()
       
-      key_pressed_now <<- state$key > 0
+      keys$down0  <- c(
+        tigerfb_keys_to_doom_code[doom_keys_now] |> unlist() |> unname(),
+        alpha_keys_now
+      )
+      keys$down   <- keys$down0[ !keys$down0 %in% keys$prior]
+      keys$up     <- keys$prior[ !keys$prior %in% keys$down0]
       
-      # coords  <<- state$mouse$coords
-      buttons <<- state$mouse$buttons
-      
-      # On the very first call, populate the prior state of the keys to be
-      # the same as the initial state.
-      # From then on, the prior state will be updated for each call. 
-      if (is.null(key_pressed_prior)) {
-        key_pressed_prior <<- key_pressed_now
-      }
-    }
-    
-    
-    
-    
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Simulate pressing keys if using the mouse
-    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # if (!is.null(coords)) {
-    #   # Pretend we've pressed the left/right  button
-    #   # depending on which side of the screen we are on
-    #   if (coords[[1]] < 640/2 - 40) {
-    #     key_pressed_now[['LEFT']] <<- TRUE
-    #   } else if (coords[[1]] > 640/2 + 40) {
-    #     key_pressed_now[['RIGHT']] <<- TRUE
-    #   }
-    #   coords <<- NULL
-    # }
+      keys$prior  <- keys$down0
 
-    if (!is.null(buttons)) {
-      if (buttons[[1]]) {
-        key_pressed_now[['CTRL']] <<- TRUE
-      }
-      buttons <<- NULL
+      # cat(state$screen[[1]], "v0 [", keys$down0, "]    v [", keys$down, "]    ^ [",
+          # keys$up, "]    - [", keys$prior, "]\n")
     }
-    
-    
-    
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Special doom keys
+    # If there were keys pressed last time that aren't pressed now,
+    # then signal this by returning (0, key-value)
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for (key in names(doom_keys)) {
-      if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
-        # pressed
-        # Capture that this was pressed in the 'prior' state, to stop this
-        # key from triggering again for this frame
-        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
-        return(c(1L, doom_keys[[key]]))
-      } else if (!key_pressed_now[[key]] && key_pressed_prior[[key]]) {
-        # released
-        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
-        return(c(0L, doom_keys[[key]]))
-      }
+    if (length(keys$up) > 0L) {
+      key <- keys$up[[1]]
+      keys$up <- keys$up[-1L]
+      return(c(0L, key))
     }
-    
-    
+
+
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # general alpha numeric and character keys
+    # If there are still keys to process, pop one off the stack and
+    # return (1, key-value)
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for (key in alpha_keys) {
-      if (key_pressed_now[[key]] && !key_pressed_prior[[key]]) {
-        # pressed
-        # Capture that this was pressed in the 'prior' state, to stop this
-        # key from triggering again for this frame
-        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
-        return(c(1L, utf8ToInt(key)))
-      } else if (!key_pressed_now[[key]] && key_pressed_prior[[key]]) {
-        # released
-        key_pressed_prior[[key]] <<- key_pressed_now[[key]]
-        return(c(0L, utf8ToInt(key)))
-      }
+    if (length(keys$down) > 0L) {
+      key <- keys$down[[1]]
+      keys$down <<- keys$down[-1L]
+      return(c(1L, key))
     }
     
     
@@ -160,19 +120,25 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     #     and can be used in future calls to decide if a key has changed from
     #     pressed-to-released or vice versa.
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    key_pressed_now <<- NULL
-    
+    keys$down  <- NULL
+    keys$up    <- NULL
+  
     # Return a custom signal to indicate that there are no more keys to 
     # process for this frame
     return(c(-1L, -1L))
   }
   
-  xpos_prior <- NULL
+  
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Callback for mouse delta
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  xpos_prior <- NULL
+  
   get_mouse_delta <- function() {
+    
+    if (!isTRUE(mouse)) return(0L)
+    
     state <- tigerfb::fb_state(window)
     
     xpos <- state$mouse$coords[[1]]
@@ -207,14 +173,16 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     .Call(doom_, wad_file, draw_frame, get_key, get_mouse_delta)
   )
   
+  message("---------------------------------------------------------------")
   message("Finished running doom. Control returning to R.")
+  message("---------------------------------------------------------------")
 }
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # These are the reference doom key values from 'doomgeneric.h'
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-ref_doom_keys <- list(
+doom_keys_to_code <- list(
   KEY_RIGHTARROW = 0xae,
   KEY_LEFTARROW	 = 0xac,
   
@@ -242,8 +210,6 @@ ref_doom_keys <- list(
   KEY_F12			   = (0x80+0x58),
   KEY_BACKSPACE	 = 0x7f,
   KEY_PAUSE	     = 0xff,
-  # KEY_EQUALS     = 0x3d,
-  # KEY_MINUS      = 0x2d,
   KEY_RSHIFT	   = (0x80+0x36),
   KEY_RCTRL      = (0x80+0x1d),
   KEY_RALT       = (0x80+0x38),
@@ -254,21 +220,22 @@ ref_doom_keys <- list(
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Mapping from 'tigr' key names to ref_doom_key values
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-doom_keys <- list(
+tigerfb_keys_to_doom_code <- list(
   RIGHT     = "KEY_RIGHTARROW", 
   LEFT      = "KEY_LEFTARROW",	 
   
   UP        = "KEY_UPARROW",		 
   DOWN      = "KEY_DOWNARROW",	 
-  `,`       = "KEY_STRAFE_L",	 
-  `.`       = "KEY_STRAFE_R",	 
   
   w         = "KEY_UPARROW",		 
   s         = "KEY_DOWNARROW",	 
   a         = "KEY_STRAFE_L",	 
   d         = "KEY_STRAFE_R",	 
   
-  ` `       = "KEY_USE",			   
+  ` `       = "KEY_FIRE",
+  e         = "KEY_USE",		
+  p         = "KEY_PAUSE",	     
+  
   CTRL      = "KEY_FIRE",		   
   ESC       = "KEY_ESCAPE",	   
   RETURN    = "KEY_ENTER",		   
@@ -286,14 +253,11 @@ doom_keys <- list(
   F11       = "KEY_F11",			   
   F12       = "KEY_F12",			   
   BACKSPACE = "KEY_BACKSPACE",	 
-  p         = "KEY_PAUSE",	     
-  # `=`       = "KEY_EQUALS",     
-  # `-`       = "KEY_MINUS",      
   SHIFT     = "KEY_RSHIFT",	   
   # CTRL      = "KEY_RCTRL",      
   # ALT       = "KEY_RALT",       
   ALT       = "KEY_LALT"
-) |> lapply(\(x) ref_doom_keys[[x]])
+) |> lapply(\(x) doom_keys_to_code[[x]])
 
 
 # #define KEY_RIGHTARROW	0xae

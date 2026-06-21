@@ -6,6 +6,7 @@
 \usage{
 doom(
   wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
+  mouse = FALSE,
   sensitivity = 75,
   ...
 )
@@ -13,6 +14,8 @@ doom(
 \arguments{
 \item{wad_file}{full path to WAD file. Default: use the demo 'doom1.wad' 
 included with this package.}
+
+\item{mouse}{use the mouse? Default: FALSE}
 
 \item{sensitivity}{75}
 
