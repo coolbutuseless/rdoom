@@ -7,7 +7,7 @@
 doom(
   wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
   mouse = FALSE,
-  sensitivity = 75,
+  sensitivity = 150,
   keymap = keymap_default(),
   ...
 )

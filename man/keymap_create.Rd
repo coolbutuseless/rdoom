@@ -4,7 +4,7 @@
 \alias{keymap_create}
 \title{Create an sanitise a keymap specification}
 \usage{
-keymap_create(..., default = TRUE)
+keymap_create(...)
 }
 \arguments{
 \item{...}{name/value pairs with the name representing a valid 'tigerfb'
