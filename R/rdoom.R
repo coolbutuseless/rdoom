@@ -124,6 +124,8 @@ keymap_default <- function() {
 #' @param mouse use the mouse? Default: FALSE
 #' @param sensitivity 75
 #' @param keymap created with 'keymap_default()' or 'keymap_create()'
+#' @param sound use sound? Default: FALSE.  Very experimental.
+#'        Needs the "audio" package to be installed.
 #' @param ... further options passed to \code{tigerfb::fb_open()}
 #' @return None
 #' @import grid
@@ -134,6 +136,7 @@ keymap_default <- function() {
 doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), 
                  mouse = FALSE,
                  sensitivity = 150,
+                 sound = FALSE,
                  keymap = keymap_default(),
                  ...) {
   
@@ -338,6 +341,30 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     xpos_prior <<- xpos
     return(as.integer(delta))
   }
+  
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  # Setup sound callback function and put it in the global environment
+  # so my audio hack can work
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  assign("audio_func", NULL, envir = globalenv())
+  if (sound) {
+    if (!requireNamespace("audio", quietly = TRUE)) {
+      stop("Need '{audio}' package to support sound")
+    }
+    
+    audio_callback <- function(sound_name, vol) {
+      snd <- doom_sounds[[sound_name]]
+      if (is.null(snd)) {
+        message("audio_callback():  NULL sound")
+      } else {
+        audio::play(snd$data * vol/64, rate = snd$rate)
+      }
+    }
+    
+    assign("audio_func", audio_callback, envir = globalenv())
+    
+  }
+  
   
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

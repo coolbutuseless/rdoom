@@ -25,8 +25,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <R.h>  // For Rprintf()
-
 #include "deh_str.h"
 #include "i_sound.h"
 #include "i_swap.h"
@@ -38,11 +36,32 @@
 
 #include "doomtype.h"
 
+#include <R.h>
+#include <Rinternals.h>
+#include <Rdefines.h>
+#include "aaa-env.h"
+#include "aaa-utils.h"
 
 int use_libsamplerate = 0;
 float libsamplerate_scale = 0;
 boolean use_sfx_prefix = false;
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Convert between double and timespec
+//    e.g. 1.5 seconds = timespec(sec = 1, nsec = 500,000,000)
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#include <time.h>
+double ts_to_dbl(struct timespec *ts) {
+  return (double)ts->tv_sec + (double)ts->tv_nsec/1e9;
+}
+
+void dbl_to_ts(double time, struct timespec *ts) {
+  ts->tv_sec  = (time_t)floor(time);
+  ts->tv_nsec = (long)(1e9 * (time - floor(time)));
+} 
+
+double timer = 0;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // 
@@ -113,11 +132,22 @@ static void GetSfxLumpName(sfxinfo_t *sfx, char *buf, size_t buf_len) {
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+// https://doom.fandom.com/wiki/Sound 
+//
+// Sound lumps in the WAD file are stored in
+// raw (PCM) format for 8-bit, monaural, typically at a sampling rate of 11025
+// Hz, although some sounds use 22050 Hz. Each sample is one byte (8 bits), and
+// in vanilla Doom, the maximum number of samples was 65535. At a sampling rate
+// of 11025 Hz, this meant the longest sound could be about six seconds.
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
   char namebuf[9];
   Rprintf("Sound: precache sounds: %i\n", num_sounds);
+  
+  int nprotect = 0;
+  SEXP doom_sounds_ = PROTECT(Rf_allocVector(VECSXP, num_sounds)); nprotect++;
+  SEXP snd_names_   = PROTECT(Rf_allocVector(STRSXP, num_sounds)); nprotect++;
+  
   for (int i = 0; i < num_sounds; i++) {
     GetSfxLumpName(&sounds[i], namebuf, sizeof(namebuf));
     sounds[i].lumpnum = W_CheckNumForName(namebuf);
@@ -144,7 +174,6 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
       samplerate = (data[3] << 8) | data[2];
       length = (data[7] << 24) | (data[6] << 16) | (data[5] << 8) | data[4];
       
-      Rprintf("[% 3i] [%i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
       
       // If the header specifies that the length of the sound is greater than
       // the length of the lump itself, this is an invalid sound lump
@@ -158,11 +187,40 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
         Rprintf("----------------------------------- invalid sound length\n");
       }
       
+      SEXP nm_   = PROTECT(Rf_mkChar(sounds[i].name));
+      SET_STRING_ELT(snd_names_, i, nm_);
       
+      // Skip 8 header bytes, then 16 bytes padding on each end.
+      SEXP data_ = PROTECT(Rf_allocVector(REALSXP, length - 32));
+      // memcpy(RAW(data_), data, length);
+      for (int j = 0; j < length - 32; j++) {
+        REAL(data_)[j] = ((double)(data[j + 16 + 8])/255.0 - 0.5) / 4.0;
+      }
+      
+      
+      SEXP rate_ = PROTECT(Rf_ScalarInteger(samplerate));
+      SEXP snd_ = PROTECT(create_named_list(
+        2, 
+        "data", data_,
+        "rate", rate_
+      ));
+      SET_VECTOR_ELT(doom_sounds_, i, snd_);
+      UNPROTECT(4);
+      
+      
+      Rprintf("[% 3i] [%i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
     } else {  
       Rprintf("[% 3i] [%i] %s\n", i, sounds[i].lumpnum,  sounds[i].name);
     }
   }
+  
+  // This is an UGLY UGLY hack to try and short-circuit the amount of work I 
+  // need to do to get audio working
+  Rf_setAttrib(doom_sounds_, R_NamesSymbol, snd_names_);
+  set_var(R_GlobalEnv, "doom_sounds", doom_sounds_);
+  
+  UNPROTECT(nprotect);
+  
 }
 
 
@@ -173,7 +231,7 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
 //  for a given SFX name.
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static int I_RStats_GetSfxLumpNum(sfxinfo_t *sfx) {
-  Rprintf("Sound: sfx lump num\n");
+  // Rprintf("Sound: sfx lump num\n");
   return 1;
 }
 
@@ -200,8 +258,38 @@ static void I_RStats_UpdateSoundParams(int handle, int vol, int sep) {
 //  is set, but currently not used by mixing.
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static int I_RStats_StartSound(sfxinfo_t *sfxinfo, int channel, int vol, int sep) {
-  Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
-  // Return -1 for failure
+  
+  SEXP fun_ = get_var(R_GlobalEnv, "audio_func");
+  if (Rf_isNull(fun_)) {
+    // Rprintf("audio: NULL\n");
+  } else {
+    
+    
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    if (ts_to_dbl(&ts) > timer) {
+      
+      Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
+      SEXP nm_ = PROTECT(Rf_mkString(sfxinfo->name));
+      SEXP vol_ = PROTECT(Rf_ScalarInteger(vol));
+      SEXP audio_callback = PROTECT(Rf_lang3(fun_, nm_, vol_));
+      SEXP res_ = PROTECT(Rf_eval(audio_callback, R_GlobalEnv));
+      
+      // Ensure a 0.25 second between sound playback.
+      // There's really not much I can do with R's standard audio
+      // playback.  If you try and play too many sounds at once, the 
+      // audio on macOS just clips like mad. Not sure what other systems do
+      timer = ts_to_dbl(&ts) + 0.1;
+      UNPROTECT(4);
+
+    } else {
+      Rprintf("t");
+    }
+
+    
+  }
+  
   return channel;
 }
 
