@@ -41,6 +41,8 @@
 
 int use_libsamplerate = 0;
 float libsamplerate_scale = 0;
+boolean use_sfx_prefix = false;
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // 
@@ -94,16 +96,73 @@ static void WriteWAV(char *filename, byte *data, uint32_t length,
 // 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static void GetSfxLumpName(sfxinfo_t *sfx, char *buf, size_t buf_len) {
-  Rprintf("Sound: get sfx lump name\n");
+  // Linked sfx lumps? Get the lump number for the sound linked to.
+  
+  if (sfx->link != NULL) {
+    sfx = sfx->link;
+  }
+  
+  // Doom adds a DS* prefix to sound lumps; Heretic and Hexen don't
+  // do this.
+  if (use_sfx_prefix) {
+    M_snprintf(buf, buf_len, "ds%s", DEH_String(sfx->name));
+  } else {
+    M_StringCopy(buf, DEH_String(sfx->name), buf_len);
+  }
 }
-
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
-  Rprintf("Sound: precache sounds\n");
+  char namebuf[9];
+  Rprintf("Sound: precache sounds: %i\n", num_sounds);
+  for (int i = 0; i < num_sounds; i++) {
+    GetSfxLumpName(&sounds[i], namebuf, sizeof(namebuf));
+    sounds[i].lumpnum = W_CheckNumForName(namebuf);
+    
+    if (sounds[i].lumpnum != -1) {
+      // CacheSFX(&sounds[i]);
+      int lumpnum;
+      unsigned int lumplen;
+      int samplerate;
+      unsigned int length;
+      byte *data;
+      
+      // need to load the sound
+      lumpnum = sounds[i].lumpnum;
+      data = W_CacheLumpNum(lumpnum, PU_STATIC);
+      lumplen = W_LumpLength(lumpnum);
+      
+      if (lumplen < 8 || data[0] != 0x03 || data[1] != 0x00) {
+        // Invalid sound
+        Rprintf("----------------------------------- invalid sound\n");
+      }
+      
+      
+      samplerate = (data[3] << 8) | data[2];
+      length = (data[7] << 24) | (data[6] << 16) | (data[5] << 8) | data[4];
+      
+      Rprintf("[% 3i] [%i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
+      
+      // If the header specifies that the length of the sound is greater than
+      // the length of the lump itself, this is an invalid sound lump
+      
+      // We also discard sound lumps that are less than 49 samples long,
+      // as this is how DMX behaves - although the actual cut-off length
+      // seems to vary slightly depending on the sample rate.  This needs
+      // further investigation to better understand the correct
+      // behavior.
+      if (length > lumplen - 8 || length <= 48) {
+        Rprintf("----------------------------------- invalid sound length\n");
+      }
+      
+      
+    } else {  
+      Rprintf("[% 3i] [%i] %s\n", i, sounds[i].lumpnum,  sounds[i].name);
+    }
+  }
 }
 
 
@@ -141,7 +200,7 @@ static void I_RStats_UpdateSoundParams(int handle, int vol, int sep) {
 //  is set, but currently not used by mixing.
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static int I_RStats_StartSound(sfxinfo_t *sfxinfo, int channel, int vol, int sep) {
-  Rprintf("Sound: start\n");
+  Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
   // Return -1 for failure
   return channel;
 }
@@ -187,6 +246,9 @@ static void I_RStats_ShutdownSound(void) {
 // 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static boolean I_RStats_InitSound(boolean _use_sfx_prefix) {
+  
+  use_sfx_prefix = _use_sfx_prefix;
+  
   Rprintf("Sound: init\n");
   return true;
 }
