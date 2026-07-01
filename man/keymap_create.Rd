@@ -2,7 +2,7 @@
 % Please edit documentation in R/rdoom.R
 \name{keymap_create}
 \alias{keymap_create}
-\title{Create an sanitise a keymap specification}
+\title{Create an sanitise a keymap specification.}
 \usage{
 keymap_create(...)
 }
@@ -12,5 +12,12 @@ key name (See \code{tigerfb::fb_key_names()}), and the value
 representing a doom key name (See \code{configuratble_doom_keys})}
 }
 \description{
-Create an sanitise a keymap specification
+See also: \code{keymap_default()}
+}
+\examples{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
+tigerfb::fb_key_names()
+configurable_doom_keys
+keymap_create(d = "KEY_STRAFE_R", ...)
+\dontshow{\}) # examplesIf}
 }

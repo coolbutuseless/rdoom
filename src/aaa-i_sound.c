@@ -46,6 +46,21 @@ int use_libsamplerate = 0;
 float libsamplerate_scale = 0;
 boolean use_sfx_prefix = false;
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// MikeFC 2026-07-01
+// Overall strategy for sound effects playback in R
+//
+// 1. Cache all sound data in an named R list in the global environment.
+//    The name of each element in the list is the name of the sound.
+// 2. When called to play a sound, call an R function from C with the name
+//    of the sound to be played.
+//    This R function is also placed in the global environment because I didn't
+//    want to build a pathway to pass this in properly when running doom and 
+//    figure out how to cascade the function call all the way to the sound
+//    handler
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Convert between double and timespec
@@ -61,7 +76,13 @@ void dbl_to_ts(double time, struct timespec *ts) {
   ts->tv_nsec = (long)(1e9 * (time - floor(time)));
 } 
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Going to use this timer to rate-limit the number of sounds that 
+// can be playihg at any one time
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 double timer = 0;
+
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // 
@@ -142,18 +163,29 @@ static void GetSfxLumpName(sfxinfo_t *sfx, char *buf, size_t buf_len) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
   char namebuf[9];
-  Rprintf("Sound: precache sounds: %i\n", num_sounds);
+  Rprintf("RStats: Precache sounds: %i\n", num_sounds);
+  
+  SEXP fun_ = get_var(R_GlobalEnv, "audio_func");
+  if (Rf_isNull(fun_)) {
+    return; 
+  }
   
   int nprotect = 0;
+  // Create a list
   SEXP doom_sounds_ = PROTECT(Rf_allocVector(VECSXP, num_sounds)); nprotect++;
   SEXP snd_names_   = PROTECT(Rf_allocVector(STRSXP, num_sounds)); nprotect++;
   
   for (int i = 0; i < num_sounds; i++) {
+    
+    // Find the game lump it is in
     GetSfxLumpName(&sounds[i], namebuf, sizeof(namebuf));
     sounds[i].lumpnum = W_CheckNumForName(namebuf);
     
+    // If we have a valid lumpnum, then 
+    //   - read the data
+    //   - parse the sample rate and total length
+    //   - save the data to the 'doom_sounds' list
     if (sounds[i].lumpnum != -1) {
-      // CacheSFX(&sounds[i]);
       int lumpnum;
       unsigned int lumplen;
       int samplerate;
@@ -168,6 +200,7 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
       if (lumplen < 8 || data[0] != 0x03 || data[1] != 0x00) {
         // Invalid sound
         Rprintf("----------------------------------- invalid sound\n");
+        break;
       }
       
       
@@ -185,6 +218,7 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
       // behavior.
       if (length > lumplen - 8 || length <= 48) {
         Rprintf("----------------------------------- invalid sound length\n");
+        break;
       }
       
       SEXP nm_   = PROTECT(Rf_mkChar(sounds[i].name));
@@ -192,30 +226,35 @@ static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
       
       // Skip 8 header bytes, then 16 bytes padding on each end.
       SEXP data_ = PROTECT(Rf_allocVector(REALSXP, length - 32));
-      // memcpy(RAW(data_), data, length);
       for (int j = 0; j < length - 32; j++) {
+        // Centre the sound around zero, and scale it heavily (i.e. /4.0) so
+        // that multiple sounds may be played at the same time without clipping.
         REAL(data_)[j] = ((double)(data[j + 16 + 8])/255.0 - 0.5) / 4.0;
       }
       
-      
+      // A sound is made up of 'data' and playback 'rate'
       SEXP rate_ = PROTECT(Rf_ScalarInteger(samplerate));
       SEXP snd_ = PROTECT(create_named_list(
         2, 
         "data", data_,
         "rate", rate_
       ));
+      
+      // Add this sound to the list of all sounds
       SET_VECTOR_ELT(doom_sounds_, i, snd_);
       UNPROTECT(4);
       
       
-      Rprintf("[% 3i] [%i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
+      Rprintf("Rstats Sound cache: [% 3i] [%2i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
     } else {  
-      Rprintf("[% 3i] [%i] %s\n", i, sounds[i].lumpnum,  sounds[i].name);
+      Rprintf("RStats Sound cache: [% 3i] [%i] %s\n", i, sounds[i].lumpnum,  sounds[i].name);
     }
   }
   
   // This is an UGLY UGLY hack to try and short-circuit the amount of work I 
-  // need to do to get audio working
+  // need to do to get audio working.
+  // I'm just putting 'doom_sounds' (list of all sound data) into the
+  // global namespace. 
   Rf_setAttrib(doom_sounds_, R_NamesSymbol, snd_names_);
   set_var(R_GlobalEnv, "doom_sounds", doom_sounds_);
   
@@ -270,21 +309,36 @@ static int I_RStats_StartSound(sfxinfo_t *sfxinfo, int channel, int vol, int sep
 
     if (ts_to_dbl(&ts) > timer) {
       
-      Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
+      // Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
+      
+      // Call R to playback the named sound.  This named sound is in the 
+      // "doom_sounds" list which was initiated in the global namespace
+      // in I_RStats_PrecacheSounds()
       SEXP nm_ = PROTECT(Rf_mkString(sfxinfo->name));
       SEXP vol_ = PROTECT(Rf_ScalarInteger(vol));
       SEXP audio_callback = PROTECT(Rf_lang3(fun_, nm_, vol_));
       SEXP res_ = PROTECT(Rf_eval(audio_callback, R_GlobalEnv));
       
-      // Ensure a 0.25 second between sound playback.
+      // Ensure a small gap between initiating a new sound playing.
       // There's really not much I can do with R's standard audio
       // playback.  If you try and play too many sounds at once, the 
-      // audio on macOS just clips like mad. Not sure what other systems do
+      // audio on macOS just clips like mad. 
+      // Clipping is partially solved by this timer limitation, and by
+      // scaling all audio samples (by diviging by 4) and by using the 
+      // "vol" value to further scale the audio
       timer = ts_to_dbl(&ts) + 0.1;
       UNPROTECT(4);
 
     } else {
-      Rprintf("t");
+      // I'm refusing to play another sound if it's only a short time 
+      // after the last played sound.  This prevents too many overlapping
+      // sounds from playing. 
+      // When there are too many sounds playing, the sound amplitide in the audio buffer
+      // exceeds 1.0, and the output clips like an absolute bastard.
+      // So limiting the number of simultaneous playing sounds helps.
+      // I'm also scaling down all the audio by a factor of 4, which means 4 sounds 
+      // should be able to play back simultanously if they are all at full volumne
+      /// i.e. vol = 64
     }
 
     

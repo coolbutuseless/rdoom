@@ -40,15 +40,17 @@
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// 
+// MikeFC RStats Version:  2026-07-01
+// "InitMusic" just returns 'false', so doomgeneric doesn't try playing 
+// music 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-static void I_SDL_ShutdownMusic(void) {
+static void I_RStats_ShutdownMusic(void) {
 
 }
 
 
 // Initialize music subsystem
-static boolean I_SDL_InitMusic(void) {
+static boolean I_RStats_InitMusic(void) {
   return false;
 }
 
@@ -63,20 +65,20 @@ static void UpdateMusicVolume(void) {
 
 
 // Set music volume (0 - 127)
-static void I_SDL_SetMusicVolume(int volume) {
+static void I_RStats_SetMusicVolume(int volume) {
 
 }
 
 
 
 // Start playing a mid
-static void I_SDL_PlaySong(void *handle, boolean looping) {
+static void I_RStats_PlaySong(void *handle, boolean looping) {
   
 }
 
 
 
-static void I_SDL_PauseSong(void) {
+static void I_RStats_PauseSong(void) {
 
 }
 
@@ -84,20 +86,20 @@ static void I_SDL_PauseSong(void) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-static void I_SDL_ResumeSong(void) {
+static void I_RStats_ResumeSong(void) {
   
 }
 
 
 
 
-static void I_SDL_StopSong(void) {
+static void I_RStats_StopSong(void) {
 
 }
 
 
 
-static void I_SDL_UnRegisterSong(void *handle) {
+static void I_RStats_UnRegisterSong(void *handle) {
 
   
 }
@@ -105,14 +107,13 @@ static void I_SDL_UnRegisterSong(void *handle) {
 
 
 
-static void *I_SDL_RegisterSong(void *data, int len) {
+static void *I_RStats_RegisterSong(void *data, int len) {
   return NULL;
 }
 
 
 // Is the song playing?
-static boolean I_SDL_MusicIsPlaying(void) {
-
+static boolean I_RStats_MusicIsPlaying(void) {
   return false;
 }
 
@@ -120,28 +121,28 @@ static boolean I_SDL_MusicIsPlaying(void) {
 
 // Poll music position; if we have passed the loop point end position
 // then we need to go back.
-static void I_SDL_PollMusic(void) {
+static void I_RStats_PollMusic(void) {
 
 }
 
 
-static snddevice_t music_sdl_devices[] = {
+static snddevice_t music_RStats_devices[] = {
     SNDDEVICE_PAS,         SNDDEVICE_GUS,     SNDDEVICE_WAVEBLASTER,
     SNDDEVICE_SOUNDCANVAS, SNDDEVICE_GENMIDI, SNDDEVICE_AWE32,
 };
 
 music_module_t DG_music_module = {
-    music_sdl_devices,    
-    arrlen(music_sdl_devices),
-    I_SDL_InitMusic,      
-    I_SDL_ShutdownMusic,
-    I_SDL_SetMusicVolume, 
-    I_SDL_PauseSong,
-    I_SDL_ResumeSong,     
-    I_SDL_RegisterSong,
-    I_SDL_UnRegisterSong, 
-    I_SDL_PlaySong,
-    I_SDL_StopSong,       
-    I_SDL_MusicIsPlaying,
-    I_SDL_PollMusic,
+    music_RStats_devices,    
+    arrlen(music_RStats_devices),
+    I_RStats_InitMusic,      
+    I_RStats_ShutdownMusic,
+    I_RStats_SetMusicVolume, 
+    I_RStats_PauseSong,
+    I_RStats_ResumeSong,     
+    I_RStats_RegisterSong,
+    I_RStats_UnRegisterSong, 
+    I_RStats_PlaySong,
+    I_RStats_StopSong,       
+    I_RStats_MusicIsPlaying,
+    I_RStats_PollMusic,
 };
