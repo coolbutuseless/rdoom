@@ -18,10 +18,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if defined(FEATURE_SOUND) && !defined(__DJGPP__)
-#include <SDL_mixer.h>
-#endif
-
 #include "config.h"
 #include "doomfeatures.h"
 #include "doomtype.h"

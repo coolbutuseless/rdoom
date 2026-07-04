@@ -39,11 +39,18 @@ alpha_keys <- alpha_keys[nchar(alpha_keys) == 1]
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#' Create an sanitise a keymap specification
+#' Create an sanitise a keymap specification.
+#' 
+#' See also: \code{keymap_default()}
 #' 
 #' @param ... name/value pairs with the name representing a valid 'tigerfb'
 #'        key name (See \code{tigerfb::fb_key_names()}), and the value
 #'        representing a doom key name (See \code{configuratble_doom_keys})
+#'        
+#' @examplesIf interactive()
+#' tigerfb::fb_key_names()
+#' configurable_doom_keys
+#' keymap_create(d = "KEY_STRAFE_R", ...)
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 keymap_create <- function(...) {
   
@@ -124,6 +131,8 @@ keymap_default <- function() {
 #' @param mouse use the mouse? Default: FALSE
 #' @param sensitivity 75
 #' @param keymap created with 'keymap_default()' or 'keymap_create()'
+#' @param sound use sound? Default: FALSE.  Very experimental.
+#'        Needs the "audio" package to be installed.
 #' @param ... further options passed to \code{tigerfb::fb_open()}
 #' @return None
 #' @import grid
@@ -134,6 +143,7 @@ keymap_default <- function() {
 doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE), 
                  mouse = FALSE,
                  sensitivity = 150,
+                 sound = FALSE,
                  keymap = keymap_default(),
                  ...) {
   
@@ -339,24 +349,45 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
     return(as.integer(delta))
   }
   
-  
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # Callback for image saving
-  # magick -delay 1 anim/*.png -delay 1 -geometry 320x200 anim.gif
-  # gifsicle -k 64 --lossy=10 --delay 4 -o anim2.gif anim.gif
+  # Setup sound callback function and put it in the global environment
+  # so my audio hack can work.
+  # The C code will fetch this function from the global environment and 
+  # call it with the name of the sound.
+  # Within C, all sound effects will be cached in the named R list "doom_sounds"
+  # which is also placed in the global environment
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  # i <- 0L
-  # draw_frame <- function(nr) {
-  #   i <<- i + 1L
-  #   if (i %% 2 == 0) {
-  #     filename <- sprintf("working/screens/image-%04i.png", i)
-  #     fastpng::write_png(nr, filename, compression_level = 0, use_filter = FALSE)
-  #   }
-  # }
+  assign("audio_func", NULL, envir = globalenv())
+  if (sound) {
+    if (!requireNamespace("audio", quietly = TRUE)) {
+      stop("Need '{audio}' package to support sound")
+    }
+    
+    # @param sound_name name of sound. Should match names of 'doom_sounds'
+    # @param vol integer value 0-64.  64 is full volumne
+    #
+    # 'doom_sounds' is a named list.  each entry consists of 
+    # floating point sound data in the range [-1, 1] but probably 
+    # prescaled to [-0.125, 0.125] in order to avoid clipping.
+    # Each sound effect also includes the playback rate. This is usually
+    # 11025Hz, but can be 22025.
+    # Sounds are always(?) single-channel
+    audio_callback <- function(sound_name, vol) {
+      snd <- doom_sounds[[sound_name]]
+      if (is.null(snd)) {
+        message("audio_callback():  NULL sound")
+      } else {
+        audio::play(snd$data * vol/64, rate = snd$rate)
+      }
+    }
+    
+    assign("audio_func", audio_callback, envir = globalenv())
+    
+  }
   
-  invisible(
-    .Call(doom_, wad_file, draw_frame, get_key, get_mouse_delta)
-  )
+
+  
+  .Call(doom_, wad_file, draw_frame, get_key, get_mouse_delta)
   
   message("---------------------------------------------------------------")
   message("Finished running doom. Control returning to R.")
@@ -515,11 +546,3 @@ doom_keys_to_code <- list(
 #   #define KEYP_ENTER      KEY_ENTER
 
 
-
-
-
-if (FALSE) {
-  
-  doom()
-  
-}

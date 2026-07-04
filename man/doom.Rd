@@ -7,7 +7,8 @@
 doom(
   wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
   mouse = FALSE,
-  sensitivity = 75,
+  sensitivity = 150,
+  sound = FALSE,
   keymap = keymap_default(),
   ...
 )
@@ -19,6 +20,9 @@ included with this package.}
 \item{mouse}{use the mouse? Default: FALSE}
 
 \item{sensitivity}{75}
+
+\item{sound}{use sound? Default: FALSE.  Very experimental.
+Needs the "audio" package to be installed.}
 
 \item{keymap}{created with 'keymap_default()' or 'keymap_create()'}
 
