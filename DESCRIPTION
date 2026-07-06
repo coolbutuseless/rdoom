@@ -3,7 +3,9 @@ Type: Package
 Title: Doom
 Version: 1.0.0
 Authors@R: c(
-    person("Mike", "Cheng", role = c("aut", "cre", 'cph'), email = "mikefc@coolbutuseless.com")
+    person("John", "Carmack", role = c("aut", 'cph'), comment = "Original Doom Author"),
+    person("Mike", "Cheng", role = c("aut", "cre", "cph"), email = "mikefc@coolbutuseless.com", 
+    comment = "Author of R interface and sound handling")
     )
 Maintainer: Mike Cheng <mikefc@coolbutuseless.com>
 Description: Doom.
@@ -11,9 +13,12 @@ Encoding: UTF-8
 Imports:
     tigerfb
 Config/roxygen2/version: 8.0.0
-Copyright: This package wraps the 'doomgeneric' library which is
+Copyright: This package wraps the 'doomgeneric' library by 'ozkl'
+   https://github.com/ozkl/doomgeneric, which is
    licensed under the GPL. It incorporates mouse delta handling from
-   https://github.com/Daxanius/doomgeneric
+   https://github.com/Daxanius/doomgeneric.
+   The open source Doom release appears to be 
+   Copyright (c) ZeniMax Media Inc which owns 'id Software'
 License: GPL (>= 2)
 Depends:
     R (>= 4.1.0)
