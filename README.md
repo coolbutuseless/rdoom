@@ -45,3 +45,17 @@ rdoom::doom()
 ```
 
 <img src="man/figures/im1.png" width="50%" />
+
+## Quirks
+
+#### Mouse control
+
+The mouse control is a bit awkward. This doom engine is expecting that
+the mouse movement delta between frames is always available. However the
+framebuffer library being used by `{tigerfb}` only supports reading the
+mouse cursor position on the screen. This means that when the mouse hits
+the edge of the screen, the movement input will fail.
+
+Fix: the best interim fix I implemented is that mouse movement in the
+bottom fraction of the screen does not act as input to the game. This
+means you can re-centre the mouse by moving it low-down on the screen.
