@@ -1,3 +1,3 @@
-# rdoom 0.1.0
+# rdoom 1.0.0
 
-* Initial release
+* Initial playable release
