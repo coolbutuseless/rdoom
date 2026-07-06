@@ -5,16 +5,28 @@
 \title{Run doom in demo mode. No keyboard input.}
 \usage{
 doom(
-  nframes = 100,
-  wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE)
+  wad_file = system.file("doom1.wad", package = "rdoom", mustWork = TRUE),
+  mouse = FALSE,
+  sensitivity = 150,
+  sound = FALSE,
+  keymap = keymap_default(),
+  ...
 )
 }
 \arguments{
-\item{nframes}{number of frames to run. Note the first 300 frames are a 
-a static image of the Doom logo.}
-
 \item{wad_file}{full path to WAD file. Default: use the demo 'doom1.wad' 
 included with this package.}
+
+\item{mouse}{use the mouse? Default: FALSE}
+
+\item{sensitivity}{75}
+
+\item{sound}{use sound? Default: FALSE.  Very experimental.
+Needs the "audio" package to be installed.}
+
+\item{keymap}{created with 'keymap_default()' or 'keymap_create()'}
+
+\item{...}{further options passed to \code{tigerfb::fb_open()}}
 }
 \value{
 None

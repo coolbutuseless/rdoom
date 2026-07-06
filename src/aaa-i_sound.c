@@ -1,0 +1,419 @@
+//
+// Copyright(C) 1993-1996 Id Software, Inc.
+// Copyright(C) 2005-2014 Simon Howard
+// Copyright(C) 2008 David Flater
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//	System interface for sound.
+//
+
+#include "config.h"
+
+#include <assert.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "deh_str.h"
+#include "i_sound.h"
+#include "i_swap.h"
+#include "i_system.h"
+#include "m_argv.h"
+#include "m_misc.h"
+#include "w_wad.h"
+#include "z_zone.h"
+
+#include "doomtype.h"
+
+#include <R.h>
+#include <Rinternals.h>
+#include <Rdefines.h>
+#include "aaa-env.h"
+#include "aaa-utils.h"
+
+int use_libsamplerate = 0;
+float libsamplerate_scale = 0;
+boolean use_sfx_prefix = false;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// MikeFC 2026-07-01
+// Overall strategy for sound effects playback in R
+//
+// 1. Cache all sound data in an named R list in the global environment.
+//    The name of each element in the list is the name of the sound.
+// 2. When called to play a sound, call an R function from C with the name
+//    of the sound to be played.
+//    This R function is also placed in the global environment because I didn't
+//    want to build a pathway to pass this in properly when running doom and 
+//    figure out how to cascade the function call all the way to the sound
+//    handler
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Convert between double and timespec
+//    e.g. 1.5 seconds = timespec(sec = 1, nsec = 500,000,000)
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#include <time.h>
+double ts_to_dbl(struct timespec *ts) {
+  return (double)ts->tv_sec + (double)ts->tv_nsec/1e9;
+}
+
+void dbl_to_ts(double time, struct timespec *ts) {
+  ts->tv_sec  = (time_t)floor(time);
+  ts->tv_nsec = (long)(1e9 * (time - floor(time)));
+} 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Going to use this timer to rate-limit the number of sounds that 
+// can be playihg at any one time
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+double timer = 0;
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void WriteWAV(char *filename, byte *data, uint32_t length,
+                     int samplerate) {
+  FILE *wav;
+  unsigned int i;
+  unsigned short s;
+
+  wav = fopen(filename, "wb");
+
+  // Header
+
+  fwrite("RIFF", 1, 4, wav);
+  i = LONG(36 + samplerate);
+  fwrite(&i, 4, 1, wav);
+  fwrite("WAVE", 1, 4, wav);
+
+  // Subchunk 1
+
+  fwrite("fmt ", 1, 4, wav);
+  i = LONG(16);
+  fwrite(&i, 4, 1, wav); // Length
+  s = SHORT(1);
+  fwrite(&s, 2, 1, wav); // Format (PCM)
+  s = SHORT(2);
+  fwrite(&s, 2, 1, wav); // Channels (2=stereo)
+  i = LONG(samplerate);
+  fwrite(&i, 4, 1, wav); // Sample rate
+  i = LONG(samplerate * 2 * 2);
+  fwrite(&i, 4, 1, wav); // Byte rate (samplerate * stereo * 16 bit)
+  s = SHORT(2 * 2);
+  fwrite(&s, 2, 1, wav); // Block align (stereo * 16 bit)
+  s = SHORT(16);
+  fwrite(&s, 2, 1, wav); // Bits per sample (16 bit)
+
+  // Data subchunk
+
+  fwrite("data", 1, 4, wav);
+  i = LONG(length);
+  fwrite(&i, 4, 1, wav);        // Data length
+  fwrite(data, 1, length, wav); // Data
+
+  fclose(wav);
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void GetSfxLumpName(sfxinfo_t *sfx, char *buf, size_t buf_len) {
+  // Linked sfx lumps? Get the lump number for the sound linked to.
+  
+  if (sfx->link != NULL) {
+    sfx = sfx->link;
+  }
+  
+  // Doom adds a DS* prefix to sound lumps; Heretic and Hexen don't
+  // do this.
+  if (use_sfx_prefix) {
+    M_snprintf(buf, buf_len, "ds%s", DEH_String(sfx->name));
+  } else {
+    M_StringCopy(buf, DEH_String(sfx->name), buf_len);
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// https://doom.fandom.com/wiki/Sound 
+//
+// Sound lumps in the WAD file are stored in
+// raw (PCM) format for 8-bit, monaural, typically at a sampling rate of 11025
+// Hz, although some sounds use 22050 Hz. Each sample is one byte (8 bits), and
+// in vanilla Doom, the maximum number of samples was 65535. At a sampling rate
+// of 11025 Hz, this meant the longest sound could be about six seconds.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void I_RStats_PrecacheSounds(sfxinfo_t *sounds, int num_sounds) {
+  char namebuf[9];
+  Rprintf("RStats: Precache sounds: %i\n", num_sounds);
+  
+  SEXP fun_ = get_var(R_GlobalEnv, "audio_func");
+  if (Rf_isNull(fun_)) {
+    return; 
+  }
+  
+  int nprotect = 0;
+  // Create a list
+  SEXP doom_sounds_ = PROTECT(Rf_allocVector(VECSXP, num_sounds)); nprotect++;
+  SEXP snd_names_   = PROTECT(Rf_allocVector(STRSXP, num_sounds)); nprotect++;
+  
+  for (int i = 0; i < num_sounds; i++) {
+    
+    // Find the game lump it is in
+    GetSfxLumpName(&sounds[i], namebuf, sizeof(namebuf));
+    sounds[i].lumpnum = W_CheckNumForName(namebuf);
+    
+    // If we have a valid lumpnum, then 
+    //   - read the data
+    //   - parse the sample rate and total length
+    //   - save the data to the 'doom_sounds' list
+    if (sounds[i].lumpnum != -1) {
+      int lumpnum;
+      unsigned int lumplen;
+      int samplerate;
+      unsigned int length;
+      byte *data;
+      
+      // need to load the sound
+      lumpnum = sounds[i].lumpnum;
+      data = W_CacheLumpNum(lumpnum, PU_STATIC);
+      lumplen = W_LumpLength(lumpnum);
+      
+      if (lumplen < 8 || data[0] != 0x03 || data[1] != 0x00) {
+        // Invalid sound
+        Rprintf("----------------------------------- invalid sound\n");
+        break;
+      }
+      
+      
+      samplerate = (data[3] << 8) | data[2];
+      length = (data[7] << 24) | (data[6] << 16) | (data[5] << 8) | data[4];
+      
+      
+      // If the header specifies that the length of the sound is greater than
+      // the length of the lump itself, this is an invalid sound lump
+      
+      // We also discard sound lumps that are less than 49 samples long,
+      // as this is how DMX behaves - although the actual cut-off length
+      // seems to vary slightly depending on the sample rate.  This needs
+      // further investigation to better understand the correct
+      // behavior.
+      if (length > lumplen - 8 || length <= 48) {
+        Rprintf("----------------------------------- invalid sound length\n");
+        break;
+      }
+      
+      SEXP nm_   = PROTECT(Rf_mkChar(sounds[i].name));
+      SET_STRING_ELT(snd_names_, i, nm_);
+      
+      // Skip 8 header bytes, then 16 bytes padding on each end.
+      SEXP data_ = PROTECT(Rf_allocVector(REALSXP, length - 32));
+      for (int j = 0; j < length - 32; j++) {
+        // Centre the sound around zero, and scale it heavily (i.e. /4.0) so
+        // that multiple sounds may be played at the same time without clipping.
+        REAL(data_)[j] = ((double)(data[j + 16 + 8])/255.0 - 0.5) / 4.0;
+      }
+      
+      // A sound is made up of 'data' and playback 'rate'
+      SEXP rate_ = PROTECT(Rf_ScalarInteger(samplerate));
+      SEXP snd_ = PROTECT(create_named_list(
+        2, 
+        "data", data_,
+        "rate", rate_
+      ));
+      
+      // Add this sound to the list of all sounds
+      SET_VECTOR_ELT(doom_sounds_, i, snd_);
+      UNPROTECT(4);
+      
+      
+      Rprintf("Rstats Sound cache: [% 3i] [%2i] %s [%i Hz] %i\n", i, sounds[i].lumpnum,  sounds[i].name, samplerate, length);
+    } else {  
+      Rprintf("RStats Sound cache: [% 3i] [%i] %s\n", i, sounds[i].lumpnum,  sounds[i].name);
+    }
+  }
+  
+  // This is an UGLY UGLY hack to try and short-circuit the amount of work I 
+  // need to do to get audio working.
+  // I'm just putting 'doom_sounds' (list of all sound data) into the
+  // global namespace. 
+  Rf_setAttrib(doom_sounds_, R_NamesSymbol, snd_names_);
+  set_var(R_GlobalEnv, "doom_sounds", doom_sounds_);
+  
+  UNPROTECT(nprotect);
+  
+}
+
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Retrieve the raw data lump index
+//  for a given SFX name.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static int I_RStats_GetSfxLumpNum(sfxinfo_t *sfx) {
+  // Rprintf("Sound: sfx lump num\n");
+  return 1;
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void I_RStats_UpdateSoundParams(int handle, int vol, int sep) {
+  // Rprintf("Sound: update params\n");
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Starting a sound means adding it
+//  to the current list of active sounds
+//  in the internal channels.
+// As the SFX info struct contains
+//  e.g. a pointer to the raw data,
+//  it is ignored.
+// As our sound handling does not handle
+//  priority, it is ignored.
+// Pitching (that is, increased speed of playback)
+//  is set, but currently not used by mixing.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static int I_RStats_StartSound(sfxinfo_t *sfxinfo, int channel, int vol, int sep) {
+  
+  SEXP fun_ = get_var(R_GlobalEnv, "audio_func");
+  if (Rf_isNull(fun_)) {
+    // Rprintf("audio: NULL\n");
+  } else {
+    
+    
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    if (ts_to_dbl(&ts) > timer) {
+      
+      // Rprintf("Sound: start: ch:%i [% 3i] %s\n", channel, vol, sfxinfo->name);
+      
+      // Call R to playback the named sound.  This named sound is in the 
+      // "doom_sounds" list which was initiated in the global namespace
+      // in I_RStats_PrecacheSounds()
+      SEXP nm_ = PROTECT(Rf_mkString(sfxinfo->name));
+      SEXP vol_ = PROTECT(Rf_ScalarInteger(vol));
+      SEXP audio_callback = PROTECT(Rf_lang3(fun_, nm_, vol_));
+      SEXP res_ = PROTECT(Rf_eval(audio_callback, R_GlobalEnv));
+      
+      // Ensure a small gap between initiating a new sound playing.
+      // There's really not much I can do with R's standard audio
+      // playback.  If you try and play too many sounds at once, the 
+      // audio on macOS just clips like mad. 
+      // Clipping is partially solved by this timer limitation, and by
+      // scaling all audio samples (by diviging by 4) and by using the 
+      // "vol" value to further scale the audio
+      timer = ts_to_dbl(&ts) + 0.1;
+      UNPROTECT(4);
+
+    } else {
+      // I'm refusing to play another sound if it's only a short time 
+      // after the last played sound.  This prevents too many overlapping
+      // sounds from playing. 
+      // When there are too many sounds playing, the sound amplitide in the audio buffer
+      // exceeds 1.0, and the output clips like an absolute bastard.
+      // So limiting the number of simultaneous playing sounds helps.
+      // I'm also scaling down all the audio by a factor of 4, which means 4 sounds 
+      // should be able to play back simultanously if they are all at full volumne
+      /// i.e. vol = 64
+    }
+
+    
+  }
+  
+  return channel;
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void I_RStats_StopSound(int handle) {
+  // Rprintf("Sound: stop\n");
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Check if sound is playing
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static boolean I_RStats_SoundIsPlaying(int handle) {
+  // Rprintf("Sound: is playing\n");
+  return false;
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Periodically called to update the sound system
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void I_RStats_UpdateSound(void) {
+  // Rprintf("Sound: update\n");
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static void I_RStats_ShutdownSound(void) {
+  // Rprintf("Sound: shutdown\n");
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+static boolean I_RStats_InitSound(boolean _use_sfx_prefix) {
+  
+  use_sfx_prefix = _use_sfx_prefix;
+  
+  Rprintf("Sound: init\n");
+  return true;
+}
+
+static snddevice_t sound_sdl_devices[] = {
+    SNDDEVICE_SB,          
+    SNDDEVICE_PAS,         
+    SNDDEVICE_GUS,
+    SNDDEVICE_WAVEBLASTER, 
+    SNDDEVICE_SOUNDCANVAS, 
+    SNDDEVICE_AWE32,
+};
+
+sound_module_t DG_sound_module = {
+    sound_sdl_devices,       
+    arrlen(sound_sdl_devices), 
+    I_RStats_InitSound,
+    I_RStats_ShutdownSound,     
+    I_RStats_GetSfxLumpNum,       
+    I_RStats_UpdateSound,
+    I_RStats_UpdateSoundParams, 
+    I_RStats_StartSound,          
+    I_RStats_StopSound,
+    I_RStats_SoundIsPlaying,    
+    I_RStats_PrecacheSounds,
+};
