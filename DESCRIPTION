@@ -18,7 +18,8 @@ Copyright: This package wraps the 'doomgeneric' library by 'ozkl'
    licensed under the GPL. It incorporates mouse delta handling from
    https://github.com/Daxanius/doomgeneric.
    The open source Doom release appears to be 
-   Copyright (c) ZeniMax Media Inc which owns 'id Software'
+   Copyright (c) ZeniMax Media Inc which owns 'id Software' and is
+   released under GPL (see inst/LICENSE-doom.txt)
 License: GPL (>= 2)
 Depends:
     R (>= 4.1.0)
