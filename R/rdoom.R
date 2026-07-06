@@ -129,11 +129,12 @@ keymap_default <- function() {
 #' @param wad_file full path to WAD file. Default: use the demo 'doom1.wad' 
 #'        included with this package.
 #' @param mouse use the mouse? Default: FALSE
-#' @param sensitivity 75
+#' @param sensitivity mouse sensitivity. Default: 150
 #' @param keymap created with 'keymap_default()' or 'keymap_create()'
-#' @param sound use sound? Default: FALSE.  Very experimental.
+#' @param sound use sound? Default: FALSE.
 #'        Needs the "audio" package to be installed.
-#' @param ... further options passed to \code{tigerfb::fb_open()}
+#' @param ... further options passed to \code{tigerfb::fb_open()}. E.g. 
+#'        \code{mode = 'fullscreen'}
 #' @return None
 #' @import grid
 #' @import grDevices
@@ -171,6 +172,7 @@ doom <- function(wad_file = system.file("doom1.wad", package = "rdoom", mustWork
   
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   # Define the callback for drawing a frame
+  # This is called from the doom engine C code
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   draw_frame <- function(nr) {
     tigerfb::fb_update(window, nr)

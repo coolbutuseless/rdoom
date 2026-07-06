@@ -33,8 +33,9 @@ graphical displays in R with mouse & keyboard input.
 
 It uses:
 
-* [`{doomgeneric}`](https://github.com/ozkl/doomgeneric) as the game engine
-* [`{tigerfb}`](https://github.com/coolbutuseless/tigerfb) as the framebuffer
+* [`doomgeneric`](https://github.com/ozkl/doomgeneric) as the game engine. A fork
+  of the original Doom source code.
+* [`{tigerfb}`](https://github.com/coolbutuseless/tigerfb) as the framebuffer for R
 * [`{nara}`](https://cran.r-project.org/package=nara) for fast native raster image support
 * [`{audio}`](https://cran.r-project.org/package=audio) for playing sound effects
 
@@ -57,9 +58,6 @@ rdoom::doom()
 
 
 
-<img src="man/figures/im1.png" width="50%" />
-
-
 ## Quirks
 
 #### Mouse control
@@ -73,4 +71,46 @@ screen, the movement input will fail.
 Fix: the best interim fix I implemented is that mouse movement in the bottom 
 fraction of the screen does not act as input to the game.  This means you 
 can re-centre the mouse by moving it low-down on the screen.
+
+
+### Cheat Codes
+
+Most cheat codes won't work directly because of the way keyboard handling is
+coordinated between the doom engine and the frame buffer provided by `{tigerfb}`
+
+To enter a cheat code, such as `iddqd`, you need to do the following:
+
+1. Press `F9` to temporarily disable control via the keyboard
+2. Type `i`, `d`, `d`, `q`, `d`
+3. Press `F10` to re-enable the keyboard controls
+
+
+### Audio
+
+For sound effects, `{rdoom}` exploits the fact that the `{audio}` package 
+can play sound asynchronously.
+
+The downside of the `{audio}` package is that it only does basic additive 
+sound mixing, so when multiple sounds play at the same time, the combined 
+magnitude exceeds the limit of the audio device and *clipping* makes
+it all sound awful.
+
+To workaround this, all audio samples have been scaled to a lower volume, and
+there is a minimum 0.1 second window between sound triggers.
+
+This means that sound may be softer than expected, and when many sounds are
+triggered to play simultaneously some of them will just go missing.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
