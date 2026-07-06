@@ -15,6 +15,9 @@ knitr::opts_chunk$set(
 library(rdoom)
 ```
 
+https://github.com/user-attachments/assets/f7fd0b61-ae9d-443c-b0ed-82120da5fe03
+
+
 # rdoom
 
 <!-- badges: start -->
