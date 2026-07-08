@@ -29,6 +29,7 @@
 
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
+#include <stdbool.h>
 
 #else
 
